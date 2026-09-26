@@ -862,7 +862,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 SpiderAdvancements.grant(killer, "slay")
                 if (enraged) SpiderAdvancements.grant(killer, "slay_boss")
             }
-            if (naturalEncounter) SpiderSpawnManager.killed(serverLevel.server)
+            SpiderSpawnManager.killed(serverLevel.server)
         }
         cleanup()
         super.die(source)
