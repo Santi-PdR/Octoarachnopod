@@ -368,12 +368,12 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val yaw = Math.toDegrees(atan2(-dx, dz)).toFloat()
         setYRot(yaw)
         yRotO = yaw
-        if (variant == Variant.HUNTER && distance <= 6.0 && target.hasLineOfSight(this)) {
-            val toSpider = Vec3(x - target.x, y + 1.0 - target.eyeY, z - target.z).normalize()
-            if (target.lookAngle.dot(toSpider) > 0.7) {
-                navigation.stop()
-                return
+        if (variant == Variant.HUNTER && serverLevel.players().any {
+                it.distanceTo(this) > 6.0 && isLookingAt(it)
             }
+        ) {
+            navigation.stop()
+            return
         }
 
         val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * (SpiderConfig.speedGrowthFactor.get() - 1.0)
@@ -473,6 +473,16 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
         return if (opening.alongX) Vec3(waypointAlong, opening.y, opening.z)
         else Vec3(opening.x, opening.y, waypointAlong)
+    }
+
+    private fun isLookingAt(player: Player): Boolean {
+        val dx = x - player.x
+        val dy = y - (player.y + player.eyeHeight)
+        val dz = z - player.z
+        val length = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+        if (length < 1.0e-6) return true
+        val look = player.lookAngle
+        return (look.x * dx + look.y * dy + look.z * dz) / length > 0.7
     }
 
     private fun waterGrowthScale(serverLevel: ServerLevel): Double? {
