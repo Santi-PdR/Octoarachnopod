@@ -342,7 +342,12 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val room = SafeGroundFinder.roomAt(serverLevel, target.x, target.y, target.z)
             if (room != null) {
                 val fitScale = max(0.12, (room - 0.2) / (1.1 + 0.3))
-                desiredScale = min(desiredScale, fitScale)
+                val passageScale = when (room.toInt()) {
+                    1 -> SpiderConfig.squeezeSize.get()
+                    2 -> 0.6
+                    else -> fitScale
+                }
+                desiredScale = min(desiredScale, min(fitScale, passageScale))
             }
         }
         val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
