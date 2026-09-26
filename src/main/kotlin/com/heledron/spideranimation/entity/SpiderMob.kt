@@ -321,7 +321,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     private fun hunt(serverLevel: ServerLevel) {
-        val brightOutside = serverLevel.isBrightOutside
+        val brightOutside = serverLevel.getSkyDarken() < 4
         val target = serverLevel.players()
             .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || !brightOutside) }
             .minByOrNull { it.distanceToSqr(this) }
