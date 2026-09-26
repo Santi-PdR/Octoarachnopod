@@ -122,6 +122,7 @@ class SpiderAnimationMod {
                             val error = runCatching {
                                 setConfigValue(entry, raw)
                                 SpiderConfig.SPEC.save()
+                                SpiderSpawnManager.onConfigSet(path)
                             }.exceptionOrNull()
                             if (error != null) {
                                 context.source.sendFailure(Component.literal("Invalid value for '$path': ${error.message ?: raw}"))
