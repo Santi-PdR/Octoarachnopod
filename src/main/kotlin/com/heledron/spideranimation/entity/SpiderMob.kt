@@ -1174,7 +1174,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             if (main != null) add(main)
         }.filter { candidate ->
             candidate.y >= planned.y - 1.6 * scale &&
-                candidate.horizontalDistanceTo(planned) <= 1.2 * scale
+                candidate.subtract(planned).horizontalDistance() <= 1.2 * scale
         }
 
         val yaw = Math.toRadians(yRot.toDouble())
