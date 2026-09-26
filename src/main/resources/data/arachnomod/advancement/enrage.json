@@ -3,7 +3,7 @@
   "display": {
     "icon": { "item": "minecraft:netherite_ingot" },
     "title": { "text": "I Have a Bad Feeling About This" },
-    "description": { "text": "Feed a netherite ingot to the spider made of netherite. What could go wrong?" },
+    "description": { "text": "Feed a netherite ingot to the spider that is made of netherite. What is the worst that could happen?" },
     "frame": "task", "show_toast": true, "announce_to_chat": true, "hidden": false
   },
   "criteria": { "impossible": { "trigger": "minecraft:impossible" } },
