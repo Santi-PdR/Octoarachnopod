@@ -828,6 +828,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         display.setTransformation(Transformation(Vector3f(-0.5f, -0.5f, -0.5f), rotation, Vector3f(width, length, width), Quaternionf()))
     }
 
+    override fun remove(reason: Entity.RemovalReason) {
+        if (!level().isClientSide) cleanup()
+        super.remove(reason)
+    }
+
     override fun die(source: DamageSource) {
         if (!level().isClientSide) {
             val serverLevel = level() as ServerLevel
