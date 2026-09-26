@@ -290,8 +290,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val forward = rider.zza
             val strafe = rider.xxa
             val yaw = Math.toRadians(rider.yRot.toDouble())
-            val speed = if (rider.isSprinting) 0.42 else 0.24
-            move(MoverType.SELF, Vec3((-sin(yaw) * forward + cos(yaw) * strafe) * speed, 0.0, (cos(yaw) * forward + sin(yaw) * strafe) * speed))
+            val input = Vec3(-sin(yaw) * forward + cos(yaw) * strafe, 0.0, cos(yaw) * forward + sin(yaw) * strafe)
+            val movement = if (input.lengthSqr() > 1.0e-6) {
+                input.normalize().scale(0.24 * scaleToSpeedFactor(SpiderConfig.riddenSize.get()))
+            } else {
+                Vec3.ZERO
+            }
+            move(MoverType.SELF, movement)
             currentScale += (SpiderConfig.riddenSize.get() - currentScale) * 0.2
             setTarget(null)
         } else if (tamed && personalOwner != null) {
