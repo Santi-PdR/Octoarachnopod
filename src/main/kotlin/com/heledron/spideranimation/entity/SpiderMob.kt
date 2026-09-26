@@ -1147,8 +1147,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         fun raycast(x: Double, z: Double): Vec3? {
             val hit = level.clip(
                 ClipContext(
-                    Vec3(x, planned.y + 1.5 * scale, z),
-                    Vec3(x, planned.y - 1.25 * scale, z),
+                    Vec3(x, planned.y + 1.76 * scale, z),
+                    Vec3(x, planned.y - 2.09 * scale, z),
                     ClipContext.Block.COLLIDER,
                     ClipContext.Fluid.NONE,
                     this
@@ -1172,6 +1172,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val candidates = buildList {
             for (x in xs) for (z in zs) raycast(x, z)?.let(::add)
             if (main != null) add(main)
+        }.filter { candidate ->
+            candidate.y >= planned.y - 1.6 * scale &&
+                candidate.subtract(planned).horizontalDistance() <= 1.2 * scale
         }
 
         val yaw = Math.toRadians(yRot.toDouble())
@@ -1179,7 +1182,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val aheadPos = BlockPos.containing(lookAhead.x, lookAhead.y, lookAhead.z)
         val obstructed = !level.getBlockState(aheadPos).getCollisionShape(level, aheadPos).isEmpty
         val preferred = if (obstructed) lookAhead.add(0.0, 0.5 * scale, 0.0) else lookAhead
-        return candidates.minByOrNull { it.distanceToSqr(preferred) } ?: main ?: planned
+        return candidates.minByOrNull { it.distanceToSqr(preferred) } ?: planned
     }
 
     private fun segment(display: BlockDisplay, start: Vec3, end: Vec3, width: Float) {
