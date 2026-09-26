@@ -988,11 +988,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     Triple(resolveSound(SpiderConfig.variantStepSound.get(), SoundEvents.NETHERITE_BLOCK_STEP), configuredVolume, 1.0f)
                 }
             }
-            Variant.HUNTER -> Triple(
-                resolveSound(SpiderConfig.variantStepSound.get(), SoundEvents.NETHERITE_BLOCK_STEP),
-                configuredVolume,
-                1.0f
-            )
+            Variant.HUNTER -> return
         }
         playSoundAt(level, position, sound, volume, pitch)
     }
