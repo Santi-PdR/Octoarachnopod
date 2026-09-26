@@ -280,8 +280,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             if (aiMode != AiMode.WANDER) {
                 patrolAnchor = Vec3(x, y, z)
                 wanderGoal = null
+                navigation.stop()
             }
-            navigation.stop()
             setTarget(null)
             aiMode = AiMode.WANDER
             alertTimer = 0
