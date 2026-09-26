@@ -30,6 +30,7 @@ class SpiderAnimationMod {
         bus.addListener(::addCreativeItems)
         MinecraftForge.EVENT_BUS.addListener(::onServerTick)
         MinecraftForge.EVENT_BUS.addListener(::onRegisterCommands)
+        SpiderConfig.migrateConfigFile(net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get())
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SpiderConfig.SPEC)
     }
 
