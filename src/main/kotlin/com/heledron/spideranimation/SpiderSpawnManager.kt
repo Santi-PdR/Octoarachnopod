@@ -43,6 +43,10 @@ object SpiderSpawnManager {
         data.setDirty()
     }
 
+    fun onServerStopping(server: MinecraftServer) {
+        if (activeServer === server) activeServer = null
+    }
+
     fun tick(server: MinecraftServer) {
         val overworld = server.overworld()
         val data = HuntData.get(overworld)
