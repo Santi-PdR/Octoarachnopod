@@ -18,6 +18,8 @@ import net.minecraft.world.damagesource.DamageSource
 import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EntityDimensions
+import net.minecraft.world.entity.Pose
 import net.minecraft.world.entity.MoverType
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MobSpawnType
@@ -92,6 +94,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     override fun registerGoals() = Unit
     override fun removeWhenFarAway(distance: Double): Boolean = false
 
+    override fun getDimensions(pose: Pose): EntityDimensions {
+        val scale = currentScale.coerceAtLeast(0.01).toFloat()
+        return EntityDimensions.scalable(2.0f * scale, 2.0f * scale)
+    }
+
     override fun startSeenByPlayer(player: ServerPlayer) {
         super.startSeenByPlayer(player)
         bossEvent.addPlayer(player)
@@ -137,6 +144,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         health = if (healToMax) maxHealth else min(health, maxHealth)
         if (variant == Variant.POISON) currentScale = SpiderConfig.poisonSize.get()
         if (variant == Variant.HUNTER) currentScale = SpiderConfig.hunterSize.get()
+        refreshDimensions()
     }
 
     fun makePersonal(owner: UUID, size: Double) {
@@ -144,12 +152,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         tamed = true
         personalSize = size.coerceIn(0.3, 20.0)
         currentScale = personalSize
+        refreshDimensions()
         setTarget(null)
     }
 
     fun resizePersonal(size: Double) {
         personalSize = size.coerceIn(0.3, 20.0)
         currentScale = personalSize
+        refreshDimensions()
     }
 
     override fun mobInteract(player: Player, hand: InteractionHand): InteractionResult {
@@ -225,6 +235,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         ensureModel(serverLevel)
         if (tickCount % 20 == 0) grantEncounterAdvancements(serverLevel)
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
+        val scaleBeforeUpdate = currentScale
 
         val rider = firstPassenger as? Player
         if (tamed && rider != null) {
@@ -254,6 +265,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             hunt(serverLevel)
         }
 
+        if (kotlin.math.abs(currentScale - scaleBeforeUpdate) > 1.0e-4) refreshDimensions()
         if (deltaMovement.horizontalDistance() > 0.015) phase += 0.45
         updateModel(serverLevel)
         bossEvent.progress = (health / maxHealth).coerceIn(0f, 1f)
