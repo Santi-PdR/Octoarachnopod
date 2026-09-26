@@ -79,6 +79,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var phase = 0.0
     private var currentScale = 1.0
     private var supportNormal = Vec3(0.0, 1.0, 0.0)
+    private var supportHeightOffset = 0.0
     private var wanderTicks = 0
     private var wanderAngle = 0.0
     private var chaseSteerSign = 1
@@ -889,9 +890,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         var bodyForward = bodyRight.cross(supportNormal).normalize()
         if (bodyForward.dot(forward) < 0.0) bodyForward = bodyForward.scale(-1.0)
 
+        val supportFootHeight = average(layouts.indices.mapNotNull { footStepTargets[it] ?: footPositions[it] })?.y
+        if (supportFootHeight != null) {
+            val preferredOffset = supportFootHeight - y
+            // The original gait corrects body height by 25% toward mean leg target height.
+            supportHeightOffset += (preferredOffset - supportHeightOffset) * 0.25
+        }
+
         val idleBreathing = !tamed && !SpiderConfig.enableWandering.get() && stationaryTicks > 0
         val breath = if (idleBreathing) sin(tickCount * 0.08) * 0.035 * scale else 0.0
-        val anchor = Vec3(x, y, z).add(supportNormal.scale(1.1 * scale)).add(0.0, breath, 0.0)
+        val anchor = Vec3(x, y + supportHeightOffset, z)
+            .add(supportNormal.scale(1.1 * scale))
+            .add(0.0, breath, 0.0)
         layouts.forEachIndexed { index, leg ->
             val pairPhase = phase + (index / 2) * Math.PI
             val stride = sin(pairPhase) * 0.25 * scale
