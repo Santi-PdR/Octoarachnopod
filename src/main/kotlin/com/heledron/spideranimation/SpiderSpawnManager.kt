@@ -151,11 +151,9 @@ object SpiderSpawnManager {
             val distance = Random.nextDouble(minDistance, maxDistance)
             val x = player.x + cos(angle) * distance
             val z = player.z + sin(angle) * distance
-            val y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt())
-            val pos = BlockPos(x.toInt(), y, z.toInt())
-            if (!level.getBlockState(pos).isAir || !level.getFluidState(pos).isEmpty ||
-                !level.getBlockState(pos.below()).blocksMotion()
-            ) return@repeat
+            val safeY = com.heledron.spideranimation.entity.SafeGroundFinder.findSafeY(level, x, z)
+                ?: return@repeat
+            val pos = BlockPos.containing(x, safeY, z)
             val spider = ModEntities.SPIDER.get().create(level) ?: return@repeat
             spider.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
             spider.moveTo(x, y.toDouble(), z, Random.nextFloat() * 360f, 0f)
