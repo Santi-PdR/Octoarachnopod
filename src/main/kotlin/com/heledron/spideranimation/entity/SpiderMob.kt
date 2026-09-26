@@ -953,13 +953,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 val position = planted ?: footStepStarts[index] ?: destination
                 val speed = SpiderConfig.legStepSpeed.get().coerceAtLeast(0.01)
                 val offset = destination.subtract(position)
-                val distance = offset.length()
-                val moved = if (distance <= speed) destination else position.add(offset.scale(speed / distance))
-                val horizontalDistance = moved.subtract(destination).horizontalDistance()
-                val stepping = if (horizontalDistance > 0.35 * scale) {
-                    moved.add(0.0, 0.35 * scale, 0.0)
-                } else moved
-                if (stepping.distanceToSqr(destination) < 1.0e-4) {
+                val horizontalOffset = Vec3(offset.x, 0.0, offset.z)
+                val horizontalDistance = horizontalOffset.length()
+                val horizontalStep = if (horizontalDistance <= speed) {
+                    Vec3(destination.x, position.y, destination.z)
+                } else {
+                    position.add(horizontalOffset.scale(speed / horizontalDistance))
+                }
+                val lift = if (horizontalDistance > 0.35 * scale) 0.35 * scale else 0.0
+                val targetY = destination.y + lift
+                val nextY = position.y + (targetY - position.y).coerceIn(-speed, speed)
+                val stepping = Vec3(horizontalStep.x, nextY, horizontalStep.z)
+                if (horizontalDistance <= speed && kotlin.math.abs(nextY - destination.y) <= speed) {
                     playFootstepSound(level, destination)
                     footPositions[index] = destination
                     footStepStarts[index] = null
