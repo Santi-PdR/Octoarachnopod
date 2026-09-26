@@ -91,6 +91,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var openingRescanAt = 0
     private var stationaryTicks = 0
     private var groomingTimer = 0
+    private var groomingOriginalLeft: Vec3? = null
+    private var groomingOriginalRight: Vec3? = null
     private val parts = mutableListOf<BlockDisplay>()
     private var riderInputForward = 0.0
     private var riderInputStrafe = 0.0
@@ -1003,7 +1005,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     .add(forward.scale(cos(progress * Math.PI * 6.0) * 0.04 * scale * rub))
                 val original = if (index == 0) groomingOriginalLeft else groomingOriginalRight
                 val arc = supportNormal.scale(sin(smooth * Math.PI) * 0.4 * scale)
-                (original ?: planted).lerp(target, smooth).add(arc))
+                (original ?: planted).lerp(target, smooth).add(arc)
             } else if (destination != null) {
                 // Match Leg.updateMovement from the original: travel at the
                 // configured world-units-per-tick speed, lift while traversing,
