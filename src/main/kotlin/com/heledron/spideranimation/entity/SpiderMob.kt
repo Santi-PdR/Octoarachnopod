@@ -17,6 +17,7 @@ import net.minecraft.world.damagesource.DamageSource
 import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.MoverType
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.entity.SpawnGroupData
@@ -71,7 +72,6 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     init {
         bossEvent.isVisible = false
         setNoGravity(true)
-        noPhysics = true
         setInvisible(true)
     }
 
@@ -219,7 +219,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val strafe = rider.xxa
             val yaw = Math.toRadians(rider.yRot.toDouble())
             val speed = if (rider.isSprinting) 0.42 else 0.24
-            setPos(x + (-sin(yaw) * forward + cos(yaw) * strafe) * speed, y, z + (cos(yaw) * forward + sin(yaw) * strafe) * speed)
+            move(MoverType.SELF, Vec3((-sin(yaw) * forward + cos(yaw) * strafe) * speed, 0.0, (cos(yaw) * forward + sin(yaw) * strafe) * speed))
             currentScale += (SpiderConfig.riddenSize.get() - currentScale) * 0.2
             setTarget(null)
         } else if (tamed && personalOwner != null) {
@@ -230,7 +230,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 val direction = Vec3(dx, 0.0, dz).normalize()
                 val speed = if (distanceTo(owner) > 8.0) 0.28 else 0.16
                 setYRot(Math.toDegrees(atan2(-dx, dz)).toFloat())
-                setPos(x + direction.x * speed, y, z + direction.z * speed)
+                move(MoverType.SELF, direction.scale(speed))
             }
             currentScale += (personalSize - currentScale) * 0.2
             setTarget(null)
@@ -300,7 +300,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
         val direction = Vec3(dx, 0.0, dz).normalize()
-        setPos(x + direction.x * speed, y, z + direction.z * speed)
+        move(MoverType.SELF, direction.scale(speed))
 
         if (distance <= 3.5 && attackTimer == 0) {
             val damage = when (variant) {
@@ -324,7 +324,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * SpiderConfig.wanderSpeedFactor.get()
         setYRot(Math.toDegrees(wanderAngle).toFloat())
         if (++wanderTicks % 120 == 0) wanderAngle += (random.nextDouble() - 0.5) * 1.5
-        setPos(x - sin(wanderAngle) * speed, y, z + cos(wanderAngle) * speed)
+        move(MoverType.SELF, Vec3(-sin(wanderAngle) * speed, 0.0, cos(wanderAngle) * speed))
     }
 
     private fun grantEncounterAdvancements(level: ServerLevel) {
