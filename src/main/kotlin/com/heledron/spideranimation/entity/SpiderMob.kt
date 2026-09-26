@@ -64,6 +64,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     )
 
     init {
+        bossEvent.isVisible = false
         setNoGravity(true)
         noPhysics = true
         setInvisible(true)
@@ -103,7 +104,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         applyVariantStats()
     }
 
-    private fun applyVariantStats() {
+    private fun applyVariantStats(healToMax: Boolean = true) {
         val variantHealth = when (variant) {
             Variant.NETHERITE -> SpiderConfig.netheriteHealth.get()
             Variant.CAMO -> SpiderConfig.camoHealth.get()
@@ -114,7 +115,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         getAttribute(Attributes.ARMOR)?.baseValue = if (variant == Variant.NETHERITE) SpiderConfig.netheriteArmor.get() else 0.0
         getAttribute(Attributes.ARMOR_TOUGHNESS)?.baseValue = if (variant == Variant.NETHERITE) SpiderConfig.netheriteArmorToughness.get() else 0.0
         getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.baseValue = if (variant == Variant.NETHERITE) SpiderConfig.netheriteKnockbackResistance.get() else 0.0
-        health = maxHealth
+        health = if (healToMax) maxHealth else min(health, maxHealth)
         if (variant == Variant.POISON) currentScale = SpiderConfig.poisonSize.get()
         if (variant == Variant.HUNTER) currentScale = SpiderConfig.hunterSize.get()
     }
@@ -174,7 +175,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         tamed = tag.getBoolean("Tamed")
         enraged = tag.getBoolean("Enraged")
         naturalEncounter = tag.getBoolean("NaturalEncounter")
-        applyVariantStats()
+        applyVariantStats(healToMax = false)
         if (enraged && variant == Variant.NETHERITE) {
             getAttribute(Attributes.MAX_HEALTH)?.baseValue = SpiderConfig.enragedHealth.get()
             bossEvent.isVisible = true
