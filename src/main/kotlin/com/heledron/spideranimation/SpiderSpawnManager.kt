@@ -1,6 +1,7 @@
 package com.heledron.spideranimation
 
 import com.heledron.spideranimation.entity.SpiderMob
+import net.minecraft.world.entity.Display.BlockDisplay
 import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.MinecraftServer
@@ -18,6 +19,7 @@ import kotlin.random.Random
 object SpiderSpawnManager {
     private const val DATA_NAME = "arachnomod_hunt"
     private var activeServer: MinecraftServer? = null
+    private var janitorTicks = 0
 
     private fun rollFirstSpawnTicks(): Int {
         val min = SpiderConfig.firstSpawnMin.get()
@@ -44,7 +46,29 @@ object SpiderSpawnManager {
     }
 
     fun onServerStopping(server: MinecraftServer) {
-        if (activeServer === server) activeServer = null
+        if (activeServer === server) {
+            activeServer = null
+            janitorTicks = 0
+        }
+    }
+
+    private fun janitorSweep(server: MinecraftServer) {
+        janitorTicks++
+        if (janitorTicks < 200) return
+        janitorTicks = 0
+        val levels = server.allLevels.toList()
+        val trackedParts = levels.asSequence()
+            .flatMap { it.getAllEntities().asSequence() }
+            .filterIsInstance<SpiderMob>()
+            .flatMap { it.trackedDisplayIds().asSequence() }
+            .toHashSet()
+        levels.forEach { level ->
+            level.getAllEntities()
+                .filterIsInstance<BlockDisplay>()
+                .filter { it.getTags().contains("arachnomod_part") && it.uuid !in trackedParts }
+                .toList()
+                .forEach { it.discard() }
+        }
     }
 
     fun tick(server: MinecraftServer) {
@@ -52,6 +76,7 @@ object SpiderSpawnManager {
         val data = HuntData.get(overworld)
         if (activeServer !== server) {
             activeServer = server
+            janitorTicks = 0
             if (data.spiderId != null) {
                 data.spiderId = null
                 data.abandonedTicks = 0
@@ -65,6 +90,7 @@ object SpiderSpawnManager {
                 data.setDirty()
             }
         }
+        janitorSweep(server)
         if (overworld.difficulty == Difficulty.PEACEFUL) {
             if (!data.wasPeaceful) { data.wasPeaceful = true; data.setDirty() }
             return
