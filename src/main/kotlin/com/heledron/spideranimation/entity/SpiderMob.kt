@@ -73,6 +73,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var patrolAnchor: Vec3? = null
     private var wanderGoal: BlockPos? = null
     private var wanderGoalExpiresAt = 0
+    private var committedOpening: SafeGroundFinder.Opening? = null
+    private var committedOpeningUntil = 0
     private val parts = mutableListOf<BlockDisplay>()
     private val footPositions = mutableListOf<Vec3?>()
     private val footStepStarts = mutableListOf<Vec3?>()
@@ -292,6 +294,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             if (aiMode != AiMode.WANDER) {
                 patrolAnchor = Vec3(x, y, z)
                 wanderGoal = null
+                committedOpening = null
                 navigation.stop()
             }
             setTarget(null)
@@ -314,6 +317,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (aiMode == AiMode.WANDER) {
             patrolAnchor = null
             wanderGoal = null
+            committedOpening = null
             aiMode = AiMode.ALERT
             alertTimer = SpiderConfig.alertReactionTicks.get()
         }
@@ -350,6 +354,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 desiredScale = min(desiredScale, min(fitScale, passageScale))
             }
         }
+        if (variant != Variant.HUNTER) {
+            passageScaleCap()?.let { desiredScale = min(desiredScale, it) }
+        }
         val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
         currentScale += (desiredScale - currentScale) * adjustment
 
@@ -371,9 +378,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
         if (SpiderConfig.chasePathfinding.get()) {
-            if (navigation.isDone || tickCount % 10 == 0) {
+            val passageWaypoint = findPassageWaypoint(serverLevel, target)
+            if (navigation.isDone || tickCount % 10 == 0 || passageWaypoint != null) {
                 val baseSpeed = getAttributeValue(Attributes.MOVEMENT_SPEED).coerceAtLeast(0.01)
-                navigation.moveTo(target, speed / baseSpeed)
+                val destination = passageWaypoint ?: target.position()
+                navigation.moveTo(destination.x, destination.y, destination.z, speed / baseSpeed)
             }
         } else {
             navigation.stop()
@@ -394,6 +403,70 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 attackTimer = SpiderConfig.attackCooldown.get()
             }
         }
+    }
+
+    private fun passageScaleCap(): Double? {
+        val opening = committedOpening ?: return null
+        val along = if (opening.alongX) x else z
+        val lane = if (opening.alongX) z else x
+        val lo = opening.lo
+        val hi = opening.hi
+        val enterAtLo = along <= (lo + hi) * 0.5
+        val entry = if (enterAtLo) lo else hi
+        val distanceToEntry = kotlin.math.abs(along - entry) +
+            kotlin.math.abs(lane - if (opening.alongX) opening.z else opening.x)
+        if (distanceToEntry >= 7.0) return null
+        if (opening.height == 1) {
+            return if (distanceToEntry < 4.5) SpiderConfig.squeezeSize.get() else 0.3
+        }
+        return if (opening.height == 2) 0.6 else null
+    }
+
+    private fun findPassageWaypoint(level: ServerLevel, target: Player): Vec3? {
+        var opening = committedOpening
+        if (opening != null && tickCount >= committedOpeningUntil) {
+            committedOpening = null
+            opening = null
+        }
+        if (opening == null) {
+            val start = Vec3(x, y + currentScale, z)
+            val end = Vec3(target.x, target.y + currentScale, target.z)
+            val hit = level.clip(ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this))
+            if (hit.type == HitResult.Type.BLOCK) {
+                val groundY = SafeGroundFinder.groundYAt(level, hit.location.x, hit.location.z, y)
+                if (groundY != null) {
+                    opening = SafeGroundFinder.collectOpenings(
+                        level, hit.location.x, hit.location.z, groundY, target.x, target.z
+                    ).firstOrNull()
+                    if (opening != null) {
+                        committedOpening = opening
+                        committedOpeningUntil = tickCount + 80
+                    }
+                }
+            }
+        }
+        opening ?: return null
+
+        val along = if (opening.alongX) x else z
+        val lane = if (opening.alongX) z else x
+        val openingLane = if (opening.alongX) opening.z else opening.x
+        val enterAtLo = along <= (opening.lo + opening.hi) * 0.5
+        val entry = if (enterAtLo) opening.lo else opening.hi
+        val exit = if (enterAtLo) opening.hi else opening.lo
+        val direction = if (enterAtLo) 1.0 else -1.0
+        val laneOffset = kotlin.math.abs(lane - openingLane)
+        val insideSpan = along > opening.lo - 1.5 && along < opening.hi + 1.5
+        if (if (enterAtLo) along > opening.hi + 2.0 else along < opening.lo - 2.0) {
+            committedOpening = null
+            return null
+        }
+        val waypointAlong = if (laneOffset >= 0.75 && !insideSpan) {
+            entry - direction * 1.6
+        } else {
+            exit + direction * 1.6
+        }
+        return if (opening.alongX) Vec3(waypointAlong, opening.y, opening.z)
+        else Vec3(opening.x, opening.y, waypointAlong)
     }
 
     private fun waterGrowthScale(serverLevel: ServerLevel): Double? {
