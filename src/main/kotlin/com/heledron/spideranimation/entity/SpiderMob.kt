@@ -297,7 +297,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
         blindnessCooldown = (blindnessCooldown - 1).coerceAtLeast(0)
         if (lungeTimer > 0) lungeTimer--
-        if (!tamed && !SpiderConfig.enableWandering.get() && deltaMovement.horizontalDistanceSqr() < 0.001) {
+        if (!SpiderConfig.enableWandering.get() && deltaMovement.horizontalDistanceSqr() < 0.001) {
             stationaryTicks++
             if (groomingTimer <= 0 && footStepTargets.getOrNull(0) == null &&
                 footStepTargets.getOrNull(1) == null && stationaryTicks > 60 &&
