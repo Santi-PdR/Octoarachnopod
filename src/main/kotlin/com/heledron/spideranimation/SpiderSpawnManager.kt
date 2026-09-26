@@ -17,6 +17,30 @@ import kotlin.random.Random
 object SpiderSpawnManager {
     private const val DATA_NAME = "arachnomod_hunt"
 
+    private fun rollFirstSpawnTicks(): Int {
+        val min = SpiderConfig.firstSpawnMin.get()
+        val max = maxOf(min, SpiderConfig.firstSpawnMax.get())
+        return (Random.nextDouble(min, max) * 1200.0).toInt().coerceAtLeast(1)
+    }
+
+    private fun killRespawnTicks(): Int =
+        (SpiderConfig.respawnAfterKill.get() * 1200.0).toInt().coerceAtLeast(1)
+
+    fun onConfigSet(path: String) {
+        val server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer() ?: return
+        val data = HuntData.get(server.overworld())
+        val duration = when (data.scheduleKind) {
+            "FIRST_SPAWN" -> if (path == "spawnMinMinutes" || path == "spawnMaxMinutes") rollFirstSpawnTicks() else return
+            "KILL_COOLDOWN" -> if (path == "respawnAfterKillMinutes") killRespawnTicks() else return
+            "PEACEFUL_EXIT" -> if (path == "peacefulExitSpawnMinutes") {
+                (SpiderConfig.peacefulExitSpawnMinutes.get() * 1200.0).toInt().coerceAtLeast(1)
+            } else return
+            else -> return
+        }
+        data.remainingTicks = (duration - data.scheduleElapsed).coerceAtLeast(1)
+        data.setDirty()
+    }
+
     fun tick(server: MinecraftServer) {
         val overworld = server.overworld()
         val data = HuntData.get(overworld)
@@ -27,7 +51,9 @@ object SpiderSpawnManager {
         if (data.wasPeaceful) {
             data.wasPeaceful = false
             data.spiderId = null
-            data.remainingTicks = (SpiderConfig.peacefulExitSpawnMinutes.get() * 1200.0).toInt()
+            data.remainingTicks = (SpiderConfig.peacefulExitSpawnMinutes.get() * 1200.0).toInt().coerceAtLeast(1)
+            data.scheduleKind = "PEACEFUL_EXIT"
+            data.scheduleElapsed = 0
             data.setDirty()
             return
         }
@@ -38,22 +64,18 @@ object SpiderSpawnManager {
         // The stored entity can be temporarily absent because its chunk is unloaded.
         // Only SpiderMob.die clears this ID, so never spawn a duplicate from a missing lookup.
         if (data.spiderId != null) return
-        if (data.spiderId != null) {
-            data.spiderId = null
-            if (data.everSpawned && !SpiderConfig.permadeath.get()) {
-                data.remainingTicks = (SpiderConfig.respawnAfterKill.get() * 1200.0).toInt()
-            }
-            data.setDirty()
-        }
-        if (!data.initialized) {
+         if (!data.initialized) {
             val min = SpiderConfig.firstSpawnMin.get()
             val max = maxOf(min, SpiderConfig.firstSpawnMax.get())
-            data.remainingTicks = (Random.nextDouble(min, max) * 1200.0).toInt()
+            data.remainingTicks = rollFirstSpawnTicks()
+            data.scheduleKind = "FIRST_SPAWN"
+            data.scheduleElapsed = 0
             data.initialized = true
             data.setDirty()
         }
         if (data.remainingTicks > 0) {
             data.remainingTicks--
+            data.scheduleElapsed++
             if (data.remainingTicks % 20 == 0) data.setDirty()
             return
         }
@@ -79,11 +101,18 @@ object SpiderSpawnManager {
             if (overworld.addFreshEntity(spider)) {
                 data.spiderId = spider.uuid
                 data.everSpawned = true
+                data.remainingTicks = 0
+                data.scheduleKind = "NONE"
+                data.scheduleElapsed = 0
                 data.setDirty()
                 return
             }
         }
-        if (!data.everSpawned) data.remainingTicks = 20
+        if (!data.everSpawned) {
+            data.remainingTicks = 20
+            data.scheduleKind = "RETRY"
+            data.scheduleElapsed = 0
+        }
         data.setDirty()
     }
 
@@ -91,7 +120,9 @@ object SpiderSpawnManager {
         val data = HuntData.get(server.overworld())
         data.spiderId = null
         data.everSpawned = true
-        data.remainingTicks = if (SpiderConfig.permadeath.get()) 0 else (SpiderConfig.respawnAfterKill.get() * 1200.0).toInt()
+        data.remainingTicks = if (SpiderConfig.permadeath.get()) 0 else killRespawnTicks()
+        data.scheduleKind = if (SpiderConfig.permadeath.get()) "NONE" else "KILL_COOLDOWN"
+        data.scheduleElapsed = 0
         data.setDirty()
     }
 
@@ -99,12 +130,16 @@ object SpiderSpawnManager {
         var spiderId: java.util.UUID? = null
         var everSpawned = false
         var remainingTicks = 0
+        var scheduleKind = "NONE"
+        var scheduleElapsed = 0
         var wasPeaceful = false
         var initialized = false
 
         override fun save(tag: CompoundTag): CompoundTag {
             tag.putBoolean("everSpawned", everSpawned)
             tag.putInt("remainingTicks", remainingTicks)
+            tag.putString("scheduleKind", scheduleKind)
+            tag.putInt("scheduleElapsed", scheduleElapsed)
             tag.putBoolean("wasPeaceful", wasPeaceful)
             tag.putBoolean("initialized", initialized)
             spiderId?.let { tag.putUUID("spiderId", it) }
@@ -115,6 +150,8 @@ object SpiderSpawnManager {
             fun load(tag: CompoundTag) = HuntData().also {
                 it.everSpawned = tag.getBoolean("everSpawned")
                 it.remainingTicks = tag.getInt("remainingTicks")
+                it.scheduleKind = tag.getString("scheduleKind").ifEmpty { "NONE" }
+                it.scheduleElapsed = tag.getInt("scheduleElapsed").coerceAtLeast(0)
                 it.wasPeaceful = tag.getBoolean("wasPeaceful")
                 it.initialized = tag.getBoolean("initialized")
                 if (tag.hasUUID("spiderId")) it.spiderId = tag.getUUID("spiderId")
