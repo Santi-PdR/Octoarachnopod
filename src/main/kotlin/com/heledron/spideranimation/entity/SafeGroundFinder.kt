@@ -38,6 +38,29 @@ object SafeGroundFinder {
         return null
     }
 
+    fun groundYAt(level: ServerLevel, x: Double, z: Double, referenceY: Double): Double? =
+        if (level.dimensionType().hasCeiling()) findSafeYNear(level, x, z, referenceY) else findSafeY(level, x, z)
+
+    fun findSafeYNear(level: ServerLevel, x: Double, z: Double, referenceY: Double, maxSearch: Int = SpiderConfig.spawnMaxVerticalSearch.get()): Double? {
+        val blockX = kotlin.math.floor(x).toInt()
+        val blockZ = kotlin.math.floor(z).toInt()
+        if (!level.hasChunk(blockX shr 4, blockZ shr 4)) return null
+        val referenceBlockY = kotlin.math.floor(referenceY).toInt()
+        val topY = minOf(referenceBlockY + 16, level.maxBuildHeight - 1)
+        val bottomY = maxOf(referenceBlockY - maxSearch, level.minBuildHeight)
+        val groundPos = BlockPos.MutableBlockPos()
+        val feetPos = BlockPos.MutableBlockPos()
+        val headPos = BlockPos.MutableBlockPos()
+        for (groundY in topY downTo bottomY) {
+            groundPos.set(blockX, groundY, blockZ)
+            if (!isDrySolidGround(level, groundPos)) continue
+            feetPos.set(blockX, groundY + 1, blockZ)
+            headPos.set(blockX, groundY + 2, blockZ)
+            if (isPassable(level, feetPos) && isPassable(level, headPos)) return (groundY + 1).toDouble()
+        }
+        return null
+    }
+
     fun findFloorBelow(level: ServerLevel, x: Double, y: Double, z: Double, maxDepth: Int = 96): Double? {
         val blockX = kotlin.math.floor(x).toInt()
         val blockZ = kotlin.math.floor(z).toInt()
