@@ -297,7 +297,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
         blindnessCooldown = (blindnessCooldown - 1).coerceAtLeast(0)
         if (lungeTimer > 0) lungeTimer--
-        if (!SpiderConfig.enableWandering.get() && deltaMovement.horizontalDistanceSqr() < 0.001) {
+        val movementSpeedSquared = deltaMovement.lengthSqr()
+        if (!SpiderConfig.enableWandering.get() && movementSpeedSquared < 0.001) {
             stationaryTicks++
             if (groomingTimer <= 0 && footStepTargets.getOrNull(0) == null &&
                 footStepTargets.getOrNull(1) == null && stationaryTicks > 60 &&
@@ -309,9 +310,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             }
         } else {
             stationaryTicks = 0
-            groomingTimer = 0
-            groomingOriginalLeft = null
-            groomingOriginalRight = null
+            if (SpiderConfig.enableWandering.get() || movementSpeedSquared > 0.01) {
+                groomingTimer = 0
+                groomingOriginalLeft = null
+                groomingOriginalRight = null
+            }
         }
         if (groomingTimer > 0) groomingTimer--
         val scaleBeforeUpdate = currentScale
