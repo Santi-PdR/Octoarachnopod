@@ -100,6 +100,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private val footStepStarts = mutableListOf<Vec3?>()
     private val footStepTargets = mutableListOf<Vec3?>()
     private val footStepProgress = mutableListOf<Double>()
+    private val footStepStartedAt = mutableListOf<Int>()
+    private val footStepStoppedAt = mutableListOf<Int>()
     private val legBlockStates = mutableListOf<BlockState?>()
     private val bossEvent = ServerBossEvent(
         Component.literal("Netherite Octoarachnopod"),
@@ -847,11 +849,15 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             footStepStarts.clear()
             footStepTargets.clear()
             footStepProgress.clear()
+            footStepStartedAt.clear()
+            footStepStoppedAt.clear()
             repeat(layouts.size) {
                 footPositions += null
                 footStepStarts += null
                 footStepTargets += null
                 footStepProgress += 0.0
+                footStepStartedAt += tickCount - 1
+                footStepStoppedAt += tickCount - 1
             }
         }
         if (legBlockStates.size != layouts.size) {
@@ -920,11 +926,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 footPositions[index] = planted
             }
             if (footStepTargets[index] == null &&
-                planted.subtract(plannedFoot).horizontalDistance() > 0.6 * scale
+                planted.subtract(plannedFoot).horizontalDistance() > 0.6 * scale &&
+                canStartLegStep(index, layouts, planted, plannedFoot, scale)
             ) {
                 footStepStarts[index] = planted
                 footStepTargets[index] = probeGround(level, plannedFoot, scale)
                 footStepProgress[index] = 0.0
+                footStepStartedAt[index] = tickCount
             }
             val destination = footStepTargets[index]
             val foot = if (groomingTimer > 0 && index < 2) {
@@ -948,6 +956,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     footPositions[index] = destination
                     footStepStarts[index] = null
                     footStepTargets[index] = null
+                    footStepStoppedAt[index] = tickCount
                     stepping
                 } else {
                     stepping
@@ -976,6 +985,44 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 )
             }
         }
+    }
+
+    private fun canStartLegStep(
+        index: Int,
+        layouts: List<LegLayout>,
+        planted: Vec3?,
+        planned: Vec3,
+        scale: Double
+    ): Boolean {
+        val crossPair = listOf(
+            index - 2,
+            index + 2,
+            if (index % 2 == 0) index + 1 else index - 1
+        ).filter { it in layouts.indices }
+        val samePair = if (index % 2 == 0) {
+            listOf(index - 1, index + 3)
+        } else {
+            listOf(index - 3, index + 1)
+        }.filter { it in layouts.indices }
+
+        // WALK's source gait keeps adjacent support feet planted and spaces
+        // starts of diagonal partners by the configured one-tick cooldowns.
+        if (crossPair.any { footStepTargets[it] != null }) return false
+        if (crossPair.any {
+                footPositions[it] != null && tickCount - footStepStoppedAt[it] < 1
+            }
+        ) return false
+        if (samePair.any {
+                footStepTargets[it] != null && tickCount - footStepStartedAt[it] < 1
+            }
+        ) return false
+
+        val wantsToMove = planted == null || planted.subtract(planned).horizontalDistance() > 0.6 * scale
+        val alreadyAtTarget = planted != null && planted.distanceToSqr(planned) < 0.01
+        val otherSupport = footPositions.indices.any {
+            it != index && footPositions[it] != null && footStepTargets[it] == null
+        }
+        return wantsToMove && !alreadyAtTarget && (onGround() || otherSupport)
     }
 
     private fun solveLeg(root: Vec3, foot: Vec3, side: Vec3, segmentLength: Double): List<Vec3> {
