@@ -187,7 +187,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val desiredScale = SpiderConfig.minSize.get() +
             (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
             ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
-        val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0\n        currentScale += (desiredScale - currentScale) * adjustment
+        val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
+        currentScale += (desiredScale - currentScale) * adjustment
 
         val dx = target.x - x
         val dz = target.z - z
@@ -201,7 +202,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
 
         val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * 7.0
-        val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0\n        val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0\n        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
+        val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
+        val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
+        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
         val direction = Vec3(dx, 0.0, dz).normalize()
         setPos(x + direction.x * speed, y, z + direction.z * speed)
 
