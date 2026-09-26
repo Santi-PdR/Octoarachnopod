@@ -146,24 +146,52 @@ object SpiderSpawnManager {
         val level = player.serverLevel()
         val minDistance = SpiderConfig.spawnDistanceMin.get()
         val maxDistance = maxOf(minDistance, SpiderConfig.spawnDistanceMax.get())
-        repeat(SpiderConfig.spawnAngleAttempts.get()) {
-            val angle = Random.nextDouble(0.0, Math.PI * 2.0)
-            val distance = Random.nextDouble(minDistance, maxDistance)
-            val x = player.x + cos(angle) * distance
-            val z = player.z + sin(angle) * distance
-            val safeY = com.heledron.spideranimation.entity.SafeGroundFinder.findSafeY(level, x, z)
-                ?: return@repeat
-            val pos = BlockPos.containing(x, safeY, z)
-            val spider = ModEntities.SPIDER.get().create(level) ?: return@repeat
-            spider.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
-            spider.moveTo(x, safeY, z, Random.nextFloat() * 360f, 0f)
-            spider.naturalEncounter = true
-            spider.chooseVariant()
-            if (level.addFreshEntity(spider)) return spider
+        val angleAttempts = SpiderConfig.spawnAngleAttempts.get()
+        val chosenDistance = Random.nextDouble(minDistance, maxDistance)
+        val candidateRadii = mutableListOf(chosenDistance)
+        var offset = 2.0
+        while (chosenDistance + offset <= maxDistance || chosenDistance - offset >= minDistance) {
+            if (chosenDistance + offset <= maxDistance) candidateRadii += chosenDistance + offset
+            if (chosenDistance - offset >= minDistance) candidateRadii += chosenDistance - offset
+            offset += 2.0
+        }
+
+        fun spawnAt(distance: Double): SpiderMob? {
+            val phase = Random.nextDouble(0.0, Math.PI * 2.0)
+            repeat(angleAttempts) { index ->
+                val angle = phase + Math.PI * 2.0 * index / angleAttempts
+                val candidateX = player.x + cos(angle) * distance
+                val candidateZ = player.z + sin(angle) * distance
+                val safeY = com.heledron.spideranimation.entity.SafeGroundFinder.groundYAt(level, candidateX, candidateZ, player.y)
+                    ?: return@repeat
+                val pos = BlockPos.containing(candidateX, safeY, candidateZ)
+                val spider = ModEntities.SPIDER.get().create(level) ?: return@repeat
+                spider.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
+                spider.moveTo(candidateX, safeY, candidateZ, Random.nextFloat() * 360f, 0f)
+                spider.naturalEncounter = true
+                spider.chooseVariant()
+                if (level.addFreshEntity(spider)) return spider
+            }
+            return null
+        }
+
+        for (distance in candidateRadii) spawnAt(distance)?.let { return it }
+        var outerDistance = maxDistance + 2.0
+        repeat(16) {
+            spawnAt(outerDistance)?.let { return it }
+            outerDistance += 2.0
+        }
+
+        val closeFallback = SpiderConfig.spawnCloseFallbackDistance.get()
+        if (closeFallback > 0.0 && closeFallback < minDistance) {
+            var fallbackDistance = minDistance - 2.0
+            while (fallbackDistance >= closeFallback) {
+                spawnAt(fallbackDistance)?.let { return it }
+                fallbackDistance -= 2.0
+            }
         }
         return null
     }
-
     fun killed(server: MinecraftServer) {
         val data = HuntData.get(server.overworld())
         data.spiderId = null
