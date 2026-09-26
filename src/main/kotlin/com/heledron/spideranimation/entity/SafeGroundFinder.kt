@@ -3,6 +3,7 @@ package com.heledron.spideranimation.entity
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.tags.FluidTags
+import net.minecraft.tags.BlockTags
 import com.heledron.spideranimation.SpiderConfig
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.block.state.BlockState
@@ -91,6 +92,40 @@ object SafeGroundFinder {
             y++
         }
         return depth.toDouble()
+    }
+
+    fun roomAt(level: ServerLevel, x: Double, groundY: Double, z: Double): Double? {
+        val blockX = kotlin.math.floor(x).toInt()
+        val blockZ = kotlin.math.floor(z).toInt()
+        if (!level.hasChunk(blockX shr 4, blockZ shr 4)) return null
+        val startY = kotlin.math.floor(groundY + 0.5).toInt()
+        val pos = BlockPos.MutableBlockPos()
+        var floorTop = Int.MIN_VALUE
+        for (offset in 0 downTo -4) {
+            pos.set(blockX, startY + offset, blockZ)
+            if (isBodyBlocking(level, pos)) {
+                floorTop = pos.y + 1
+                break
+            }
+        }
+        if (floorTop == Int.MIN_VALUE || kotlin.math.abs(groundY - floorTop) > 1.5) return null
+        val walledX = isBodyBlocking(level, BlockPos(blockX + 1, floorTop, blockZ)) && isBodyBlocking(level, BlockPos(blockX - 1, floorTop, blockZ))
+        val walledZ = isBodyBlocking(level, BlockPos(blockX, floorTop, blockZ + 1)) && isBodyBlocking(level, BlockPos(blockX, floorTop, blockZ - 1))
+        if (!walledX && !walledZ) return null
+        var headroom = 4
+        for (dy in 0..3) {
+            if (isBodyBlocking(level, BlockPos(blockX, floorTop + dy, blockZ))) {
+                headroom = dy
+                break
+            }
+        }
+        return if (headroom >= 1 && headroom < 4) headroom.toDouble() else null
+    }
+
+    private fun isBodyBlocking(level: ServerLevel, pos: BlockPos): Boolean {
+        val state = level.getBlockState(pos)
+        return !state.isAir && !state.`is`(BlockTags.DOORS) && !state.`is`(BlockTags.TRAPDOORS) &&
+            !state.`is`(BlockTags.FENCE_GATES) && !state.getCollisionShape(level, pos).isEmpty
     }
 
     private fun isDrySolidGround(level: ServerLevel, pos: BlockPos): Boolean {
