@@ -198,6 +198,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val yaw = Math.toRadians(rider.yRot.toDouble())
             val speed = if (rider.isSprinting) 0.42 else 0.24
             setPos(x + (-sin(yaw) * forward + cos(yaw) * strafe) * speed, y, z + (cos(yaw) * forward + sin(yaw) * strafe) * speed)
+            currentScale += (SpiderConfig.riddenSize.get() - currentScale) * 0.2
             setTarget(null)
         } else if (!tamed) {
             hunt(serverLevel)
@@ -221,7 +222,12 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (target == null || distanceTo(target) > SpiderConfig.chaseDistance.get() * SpiderConfig.chaseExitMultiplier.get()) {
             setTarget(null)
             alertTimer = 0
-            currentScale += (1.0 - currentScale) * 0.03
+            val idleScale = when (variant) {
+                Variant.POISON -> SpiderConfig.poisonSize.get()
+                Variant.HUNTER -> SpiderConfig.hunterSize.get()
+                else -> 1.0
+            }
+            currentScale += (idleScale - currentScale) * 0.03
             wander(serverLevel)
             return
         }
@@ -250,6 +256,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             alertTimer--
             return
         }
+        if (variant == Variant.HUNTER && target.hasLineOfSight(this)) {
+            val toSpider = Vec3(x - target.x, y + 1.0 - target.eyeY, z - target.z).normalize()
+            if (target.lookAngle.dot(toSpider) > 0.82) return
+        }
 
         val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * (SpiderConfig.speedGrowthFactor.get() - 1.0)
         val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
@@ -260,10 +270,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
         if (distance <= 3.5 && attackTimer == 0) {
             val damage = when (variant) {
-                Variant.NETHERITE -> if (enraged) 24f else 12f
-                Variant.POISON -> 8f
-                Variant.HUNTER -> 10f
-                Variant.CAMO -> 8f
+                Variant.NETHERITE -> (if (enraged) SpiderConfig.enragedAttackDamageHearts.get() else SpiderConfig.netheriteAttackDamageHearts.get()).toFloat() * 2f
+                Variant.POISON -> SpiderConfig.poisonAttackDamageHearts.get().toFloat() * 2f
+                Variant.HUNTER -> SpiderConfig.hunterAttackDamageHearts.get().toFloat() * 2f
+                Variant.CAMO -> SpiderConfig.camoAttackDamageHearts.get().toFloat() * 2f
             }
             if (target.hurt(damageSources().mobAttack(this), damage)) {
                 if (variant == Variant.POISON) target.addEffect(MobEffectInstance(MobEffects.POISON, (SpiderConfig.poisonEffectSeconds.get() * 20).toInt(), 1))
@@ -274,8 +284,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     private fun wander(@Suppress("UNUSED_PARAMETER") serverLevel: ServerLevel) {
+        if (!SpiderConfig.enableWandering.get()) return
+        if (random.nextDouble() < SpiderConfig.wanderPauseChance.get() / 20.0) return
         if (random.nextInt(100) == 0) wanderAngle = random.nextDouble() * Math.PI * 2.0
-        val speed = 0.04
+        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * SpiderConfig.wanderSpeedFactor.get()
         setYRot(Math.toDegrees(wanderAngle).toFloat())
         if (++wanderTicks % 120 == 0) wanderAngle += (random.nextDouble() - 0.5) * 1.5
         setPos(x - sin(wanderAngle) * speed, y, z + cos(wanderAngle) * speed)
