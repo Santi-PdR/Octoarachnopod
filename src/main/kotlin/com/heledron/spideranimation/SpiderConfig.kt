@@ -1,9 +1,15 @@
 package com.heledron.spideranimation
 
 import net.minecraftforge.common.ForgeConfigSpec
+import com.electronwill.nightconfig.core.file.CommentedFileConfig
+import java.nio.file.Files
+import java.nio.file.Path
 
 object SpiderConfig {
     private val builder = ForgeConfigSpec.Builder()
+    private val configVersion = builder
+        .comment("Internal config-format version - do not edit.")
+        .defineInRange("configVersion", 5, 1, 5)
     val firstSpawnMin = builder.defineInRange("spawnMinMinutes", 1.0, 0.05, 1440.0)
     val peacefulExitSpawnMinutes = builder.defineInRange("peacefulExitSpawnMinutes", 1.0, 0.05, 1440.0)
     val firstSpawnMax = builder.defineInRange("spawnMaxMinutes", 1.0, 0.05, 1440.0)
@@ -137,5 +143,55 @@ object SpiderConfig {
         "variantLandVolume" to variantLandVolume,
         "hostileOnlyAtNight" to hunterLightBlindnessOnlyAtNight
     )
+    fun migrateConfigFile(configDir: Path) {
+        val file = configDir.resolve("arachnomod-common.toml")
+        if (!Files.exists(file)) return
+
+        runCatching {
+            CommentedFileConfig.builder(file).preserveInsertionOrder().build().use { config ->
+                config.load()
+                val hasContent = config.get<Any>("spawnMinMinutes") != null
+                val fileVersion = (config.get<Number>("configVersion")?.toInt())
+                    ?: if (hasContent) 1 else 5
+
+                fun migrateDefault(path: String, oldValue: Number, newValue: Number) {
+                    val current = config.get<Any>(path)
+                    val matches = when (oldValue) {
+                        is Double -> (current as? Number)?.toDouble() == oldValue
+                        is Int -> (current as? Number)?.toInt() == oldValue
+                        else -> current == oldValue
+                    }
+                    if (matches) config.set(path, newValue)
+                }
+
+                if (fileVersion < 2) {
+                    migrateDefault("spawnMinMinutes", 5.0, 1.0)
+                    migrateDefault("spawnMaxMinutes", 30.0, 1.0)
+                    migrateDefault("spawnAngleAttempts", 12, 24)
+                }
+                if (fileVersion < 3) migrateDefault("maxHealth", 1000.0, 600.0)
+                if (fileVersion < 4) {
+                    val oldHealth = (config.get<Number>("maxHealth"))?.toDouble()
+                    if (oldHealth != null && oldHealth != 600.0) {
+                        config.set("netheriteMaxHealth", oldHealth)
+                        config.set("camoMaxHealth", oldHealth)
+                    }
+                    config.remove("maxHealth")
+                }
+                if (fileVersion < 5) {
+                    val oldDamage = (config.get<Number>("attackDamageHearts"))?.toDouble()
+                    if (oldDamage != null && oldDamage != 6.0) {
+                        config.set("netheriteAttackDamageHearts", oldDamage)
+                        config.set("camoAttackDamageHearts", oldDamage)
+                        config.set("hunterAttackDamageHearts", oldDamage)
+                    }
+                    config.remove("attackDamageHearts")
+                }
+                config.set("configVersion", 5)
+                config.save()
+            }
+        }
+    }
+
     val SPEC: ForgeConfigSpec = builder.build()
 }
