@@ -1065,7 +1065,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             } else {
                 planted
             }
-            val points = solveLeg(root, foot, right.scale(leg.side), leg.segmentLength * scale)
+            val points = solveLeg(root, foot, right.scale(leg.side), bodyForward, leg.segmentLength * scale)
             if (variant == Variant.CAMO) {
                 camoBlockUnder(level, foot)?.let { groundBlock ->
                     if (legBlockStates[index] != groundBlock) {
@@ -1129,14 +1129,36 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         return wantsToMove && !alreadyAtTarget && (onGround() || otherSupport)
     }
 
-    private fun solveLeg(root: Vec3, foot: Vec3, side: Vec3, segmentLength: Double): List<Vec3> {
+    private fun solveLeg(root: Vec3, foot: Vec3, side: Vec3, bodyForward: Vec3, segmentLength: Double): List<Vec3> {
         val fallback = if (side.lengthSqr() > 1.0e-8) side.normalize() else Vec3(0.0, 0.0, 1.0)
-        val points = arrayOf(
-            root,
-            root.lerp(foot, 1.0 / 3.0).add(fallback.scale(segmentLength * 0.65)),
-            root.lerp(foot, 2.0 / 3.0).add(fallback.scale(segmentLength * 0.65)),
-            foot
+        val forward = Vector3f(0f, 0f, 1f)
+        val pivot = Quaternionf().rotationTo(
+            forward,
+            Vector3f(bodyForward.x.toFloat(), bodyForward.y.toFloat(), bodyForward.z.toFloat())
         )
+        val legDirection = foot.subtract(root)
+        val legOrientation = Quaternionf().rotationTo(
+            forward,
+            Vector3f(legDirection.x.toFloat(), legDirection.y.toFloat(), legDirection.z.toFloat())
+        )
+        val relativeRotation = Quaternionf(pivot).difference(legOrientation).getEulerAnglesYXZ(Vector3f())
+        val straightening = Quaternionf(pivot).rotateYXZ(
+            relativeRotation.y,
+            relativeRotation.x + Math.toRadians(-80.0).toFloat(),
+            0f
+        )
+        val initialDirection = Vector3f(forward).rotate(straightening)
+        val points = arrayOf(root, root, root, root)
+        for (index in 1..3) {
+            points[index] = points[index - 1].add(
+                initialDirection.x.toDouble(),
+                initialDirection.y.toDouble(),
+                initialDirection.z.toDouble()
+            ).also {
+                // Each default spider segment starts in its configured forward direction.
+                points[index] = it
+            }
+        }
 
         // Match the original KinematicChain FABRIK pass: pin the foot first,
         // pull the joints toward it, then pin the root and extend back outward.
