@@ -68,6 +68,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var wanderTicks = 0
     private var wanderAngle = 0.0
     private val parts = mutableListOf<BlockDisplay>()
+    private val footPositions = mutableListOf<Vec3?>()
+    private val footStepStarts = mutableListOf<Vec3?>()
+    private val footStepTargets = mutableListOf<Vec3?>()
+    private val footStepProgress = mutableListOf<Double>()
     private val bossEvent = ServerBossEvent(
         Component.literal("Netherite Octoarachnopod"),
         BossEvent.BossBarColor.PURPLE,
@@ -439,6 +443,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private fun updateModel(level: ServerLevel) {
         val layouts = legLayouts()
         if (parts.size != layouts.size * 3) return
+        if (footPositions.size != layouts.size) {
+            footPositions.clear()
+            footStepStarts.clear()
+            footStepTargets.clear()
+            footStepProgress.clear()
+            repeat(layouts.size) {
+                footPositions += null
+                footStepStarts += null
+                footStepTargets += null
+                footStepProgress += 0.0
+            }
+        }
         val scale = currentScale
         val yaw = Math.toRadians(yRot.toDouble())
         val forward = Vec3(-sin(yaw), 0.0, cos(yaw))
@@ -453,19 +469,35 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val plannedFoot = Vec3(x, y + 0.04 * scale + lift, z)
                 .add(right.scale(leg.side * leg.restX * scale))
                 .add(forward.scale((leg.restZ + stride) * scale))
-            val groundHit = level.clip(
-                ClipContext(
-                    plannedFoot.add(0.0, 1.5 * scale, 0.0),
-                    plannedFoot.add(0.0, -1.25 * scale, 0.0),
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    this
-                )
-            )
-            val foot = if (groundHit.type == HitResult.Type.BLOCK) {
-                groundHit.location.add(0.0, 0.025 * scale, 0.0)
+            var planted = footPositions[index]
+            if (planted == null) {
+                planted = probeGround(level, plannedFoot, scale)
+                footPositions[index] = planted
+            }
+            if (footStepTargets[index] == null &&
+                planted.subtract(plannedFoot).horizontalDistance() > 0.6 * scale
+            ) {
+                footStepStarts[index] = planted
+                footStepTargets[index] = probeGround(level, plannedFoot, scale)
+                footStepProgress[index] = 0.0
+            }
+            val destination = footStepTargets[index]
+            val foot = if (destination != null) {
+                val progress = (footStepProgress[index] + (SpiderConfig.legStepSpeed.get() / 5.0).coerceIn(0.05, 1.0)).coerceAtMost(1.0)
+                footStepProgress[index] = progress
+                val start = footStepStarts[index] ?: planted
+                val stepping = start.lerp(destination, progress)
+                    .add(0.0, sin(progress * Math.PI) * 0.25 * scale, 0.0)
+                if (progress >= 1.0) {
+                    footPositions[index] = destination
+                    footStepStarts[index] = null
+                    footStepTargets[index] = null
+                    stepping
+                } else {
+                    stepping
+                }
             } else {
-                plannedFoot
+                planted
             }
             val firstJoint = root.lerp(foot, 0.28)
                 .add(right.scale(leg.side * leg.reach * 0.42 * scale))
@@ -484,6 +516,19 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 )
             }
         }
+    }
+
+    private fun probeGround(level: ServerLevel, planned: Vec3, scale: Double): Vec3 {
+        val hit = level.clip(
+            ClipContext(
+                planned.add(0.0, 1.5 * scale, 0.0),
+                planned.add(0.0, -1.25 * scale, 0.0),
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                this
+            )
+        )
+        return if (hit.type == HitResult.Type.BLOCK) hit.location.add(0.0, 0.025 * scale, 0.0) else planned
     }
 
     private fun segment(display: BlockDisplay, start: Vec3, end: Vec3, width: Float) {
