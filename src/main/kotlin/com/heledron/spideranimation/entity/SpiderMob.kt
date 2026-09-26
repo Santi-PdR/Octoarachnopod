@@ -1063,16 +1063,42 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     private fun probeGround(level: ServerLevel, planned: Vec3, scale: Double): Vec3 {
-        val hit = level.clip(
-            ClipContext(
-                planned.add(0.0, 1.5 * scale, 0.0),
-                planned.add(0.0, -1.25 * scale, 0.0),
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                this
+        fun raycast(x: Double, z: Double): Vec3? {
+            val hit = level.clip(
+                ClipContext(
+                    Vec3(x, planned.y + 1.5 * scale, z),
+                    Vec3(x, planned.y - 1.25 * scale, z),
+                    ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE,
+                    this
+                )
             )
-        )
-        return if (hit.type == HitResult.Type.BLOCK) hit.location.add(0.0, 0.025 * scale, 0.0) else planned
+            return if (hit.type == HitResult.Type.BLOCK) hit.location.add(0.0, 0.025 * scale, 0.0) else null
+        }
+
+        val main = raycast(planned.x, planned.z)
+        if (main != null && main.y in (planned.y - 0.24 * scale)..(planned.y + 1.5 * scale)) return main
+
+        // The original scans the center and neighboring block edges when the
+        // direct ray finds no usable surface, helping legs land on stairs and ledges.
+        val margin = 0.125 * scale
+        val minX = kotlin.math.floor(planned.x) - margin
+        val maxX = kotlin.math.ceil(planned.x) + margin
+        val minZ = kotlin.math.floor(planned.z) - margin
+        val maxZ = kotlin.math.ceil(planned.z) + margin
+        val xs = listOf(minX, planned.x, maxX)
+        val zs = listOf(minZ, planned.z, maxZ)
+        val candidates = buildList {
+            for (x in xs) for (z in zs) raycast(x, z)?.let(::add)
+            if (main != null) add(main)
+        }
+
+        val yaw = Math.toRadians(yRot.toDouble())
+        val lookAhead = planned.add(-sin(yaw) * scale, 0.0, cos(yaw) * scale)
+        val aheadPos = BlockPos.containing(lookAhead.x, lookAhead.y, lookAhead.z)
+        val obstructed = !level.getBlockState(aheadPos).getCollisionShape(level, aheadPos).isEmpty
+        val preferred = if (obstructed) lookAhead.add(0.0, 0.5 * scale, 0.0) else lookAhead
+        return candidates.minByOrNull { it.distanceToSqr(preferred) } ?: main ?: planned
     }
 
     private fun segment(display: BlockDisplay, start: Vec3, end: Vec3, width: Float) {
