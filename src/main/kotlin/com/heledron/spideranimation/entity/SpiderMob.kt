@@ -4,6 +4,7 @@ import com.heledron.spideranimation.ModItems
 import com.heledron.spideranimation.SpiderConfig
 import com.heledron.spideranimation.SpiderSpawnManager
 import com.heledron.spideranimation.SpiderAdvancements
+import net.minecraft.nbt.CompoundTag
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
@@ -99,6 +100,23 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             random.nextDouble() < SpiderConfig.camoChance.get() -> Variant.CAMO
             else -> Variant.NETHERITE
         }
+        applyVariantStats()
+    }
+
+    private fun applyVariantStats() {
+        val variantHealth = when (variant) {
+            Variant.NETHERITE -> SpiderConfig.netheriteHealth.get()
+            Variant.CAMO -> SpiderConfig.camoHealth.get()
+            Variant.POISON -> SpiderConfig.poisonHealth.get()
+            Variant.HUNTER -> SpiderConfig.hunterHealth.get()
+        }
+        getAttribute(Attributes.MAX_HEALTH)?.baseValue = variantHealth
+        getAttribute(Attributes.ARMOR)?.baseValue = if (variant == Variant.NETHERITE) SpiderConfig.netheriteArmor.get() else 0.0
+        getAttribute(Attributes.ARMOR_TOUGHNESS)?.baseValue = if (variant == Variant.NETHERITE) SpiderConfig.netheriteArmorToughness.get() else 0.0
+        getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.baseValue = if (variant == Variant.NETHERITE) SpiderConfig.netheriteKnockbackResistance.get() else 0.0
+        health = maxHealth
+        if (variant == Variant.POISON) currentScale = SpiderConfig.poisonSize.get()
+        if (variant == Variant.HUNTER) currentScale = SpiderConfig.hunterSize.get()
     }
 
     override fun mobInteract(player: Player, hand: InteractionHand): InteractionResult {
@@ -113,6 +131,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 val newMax = max(oldMax, SpiderConfig.enragedHealth.get())
                 attr?.baseValue = newMax
                 health = min(maxHealth, health + (newMax - oldMax).toFloat())
+                bossEvent.isVisible = true
                 bossEvent.name = Component.literal("Enraged Netherite Octoarachnopod")
                 bossEvent.color = BossEvent.BossBarColor.RED
                 bossEvent.isVisible = true
@@ -141,6 +160,27 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         return super.mobInteract(player, hand)
     }
 
+    override fun addAdditionalSaveData(tag: CompoundTag) {
+        super.addAdditionalSaveData(tag)
+        tag.putString("Variant", variant.name)
+        tag.putBoolean("Tamed", tamed)
+        tag.putBoolean("Enraged", enraged)
+        tag.putBoolean("NaturalEncounter", naturalEncounter)
+    }
+
+    override fun readAdditionalSaveData(tag: CompoundTag) {
+        super.readAdditionalSaveData(tag)
+        variant = runCatching { Variant.valueOf(tag.getString("Variant")) }.getOrDefault(Variant.NETHERITE)
+        tamed = tag.getBoolean("Tamed")
+        enraged = tag.getBoolean("Enraged")
+        naturalEncounter = tag.getBoolean("NaturalEncounter")
+        applyVariantStats()
+        if (enraged && variant == Variant.NETHERITE) {
+            getAttribute(Attributes.MAX_HEALTH)?.baseValue = SpiderConfig.enragedHealth.get()
+            bossEvent.isVisible = true
+        }
+    }
+
     override fun tick() {
         super.tick()
         if (level().isClientSide) return
@@ -165,6 +205,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         phase += if (deltaMovement.horizontalDistance() > 0.015) 0.45 else 0.08
         updateModel()
         bossEvent.progress = (health / maxHealth).coerceIn(0f, 1f)
+        if (variant == Variant.HUNTER && SpiderConfig.hunterBlindnessRange.get() > 0 && tickCount % 20 == 0) {
+            serverLevel.players().filter { it.distanceTo(this) <= SpiderConfig.hunterBlindnessRange.get() }.forEach {
+                it.addEffect(MobEffectInstance(MobEffects.BLINDNESS, (SpiderConfig.hunterBlindnessSeconds.get() * 20).toInt(), 0, true, false))
+            }
+        }
     }
 
     private fun hunt(serverLevel: ServerLevel) {
@@ -184,9 +229,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val distance = distanceTo(target)
         val near = SpiderConfig.sizeNearDistance.get()
         val far = max(near + 0.01, SpiderConfig.sizeFarDistance.get())
-        val desiredScale = SpiderConfig.minSize.get() +
-            (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
-            ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
+        val desiredScale = when (variant) {
+            Variant.POISON -> SpiderConfig.poisonSize.get()
+            Variant.HUNTER -> SpiderConfig.hunterSize.get()
+            else -> SpiderConfig.minSize.get() +
+                (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
+                ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
+        }
         val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
         currentScale += (desiredScale - currentScale) * adjustment
 
@@ -201,7 +250,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             return
         }
 
-        val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * 7.0
+        val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * (SpiderConfig.speedGrowthFactor.get() - 1.0)
         val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
