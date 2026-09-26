@@ -35,6 +35,9 @@ object SpiderSpawnManager {
             server.allLevels.asSequence().mapNotNull { it.getEntity(uuid) as? SpiderMob }.firstOrNull { it.isAlive }
         }
         if (active != null) return
+        // The stored entity can be temporarily absent because its chunk is unloaded.
+        // Only SpiderMob.die clears this ID, so never spawn a duplicate from a missing lookup.
+        if (data.spiderId != null) return
         if (data.spiderId != null) {
             data.spiderId = null
             if (data.everSpawned && !SpiderConfig.permadeath.get()) {
