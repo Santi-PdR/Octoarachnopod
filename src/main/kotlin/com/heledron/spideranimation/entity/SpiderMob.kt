@@ -93,6 +93,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var groomingTimer = 0
     private var groomingOriginalLeft: Vec3? = null
     private var groomingOriginalRight: Vec3? = null
+    private var groomingOriginalLeftGrounded = false
+    private var groomingOriginalRightGrounded = false
     private val parts = mutableListOf<BlockDisplay>()
     private var riderInputForward = 0.0
     private var riderInputStrafe = 0.0
@@ -301,22 +303,41 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (!SpiderConfig.enableWandering.get() && movementSpeedSquared < 0.001) {
             stationaryTicks++
             if (groomingTimer <= 0 && footStepTargets.getOrNull(0) == null &&
-                footStepTargets.getOrNull(1) == null && stationaryTicks > 60 &&
+                footStepTargets.getOrNull(1) == null && footGrounded.getOrNull(0) == true &&
+                footGrounded.getOrNull(1) == true && stationaryTicks > 60 &&
                 random.nextDouble() < SpiderConfig.groomingChance.get() / 20.0
             ) {
                 groomingOriginalLeft = footPositions.getOrNull(0)
                 groomingOriginalRight = footPositions.getOrNull(1)
-                if (groomingOriginalLeft != null && groomingOriginalRight != null) groomingTimer = 100
+                if (groomingOriginalLeft != null && groomingOriginalRight != null) {
+                    groomingOriginalLeftGrounded = footGrounded[0]
+                    groomingOriginalRightGrounded = footGrounded[1]
+                    footGrounded[0] = false
+                    footGrounded[1] = false
+                    groomingTimer = 100
+                }
             }
         } else {
             stationaryTicks = 0
             if (SpiderConfig.enableWandering.get() || movementSpeedSquared > 0.01) {
+                if (groomingTimer > 0) {
+                    footGrounded[0] = groomingOriginalLeftGrounded
+                    footGrounded[1] = groomingOriginalRightGrounded
+                }
                 groomingTimer = 0
                 groomingOriginalLeft = null
                 groomingOriginalRight = null
             }
         }
-        if (groomingTimer > 0) groomingTimer--
+        if (groomingTimer > 0) {
+            groomingTimer--
+            if (groomingTimer == 0) {
+                footGrounded[0] = groomingOriginalLeftGrounded
+                footGrounded[1] = groomingOriginalRightGrounded
+                groomingOriginalLeft = null
+                groomingOriginalRight = null
+            }
+        }
         val scaleBeforeUpdate = currentScale
 
         val rider = firstPassenger as? Player
@@ -500,7 +521,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
         val attackReach = 3.5 * min(currentScale, 2.0)
         if (variant == Variant.POISON) {
-            if (lungeTimer == 0 && attackTimer == 0 && distance <= attackReach * 2.2) {
+            if (lungeTimer == 0 && groomingTimer == 0 && attackTimer == 0 && distance <= attackReach * 2.2) {
                 lungeDirection = Vec3(dx, 0.0, dz).normalize()
                 if (lungeDirection.lengthSqr() > 1.0e-8) {
                     lungeTimer = 14
@@ -991,6 +1012,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 footGrounded[index] = false
                 raisedFoot
             } else if (groomingTimer > 0 && index < 2) {
+                footGrounded[index] = false
                 val progress = 1.0 - groomingTimer / 100.0
                 val edge = ((progress / 0.2).coerceAtMost(1.0) * ((1.0 - progress) / 0.2).coerceAtMost(1.0)).coerceIn(0.0, 1.0)
                 val smooth = edge * edge * (3.0 - 2.0 * edge)
