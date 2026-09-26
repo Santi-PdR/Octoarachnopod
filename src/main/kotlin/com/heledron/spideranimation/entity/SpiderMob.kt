@@ -46,6 +46,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, level) {
     enum class Variant { NETHERITE, CAMO, POISON, HUNTER }
