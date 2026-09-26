@@ -27,12 +27,14 @@ import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.monster.Monster
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.ClipContext
 import net.minecraft.world.level.ServerLevelAccessor
 import net.minecraft.world.entity.Display.BlockDisplay
 import net.minecraft.world.entity.EntityType.BLOCK_DISPLAY
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.Vec3
+import net.minecraft.world.phys.HitResult
 import com.mojang.math.Transformation
 import org.joml.Quaternionf
 import org.joml.Vector3f
@@ -244,7 +246,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
 
         if (deltaMovement.horizontalDistance() > 0.015) phase += 0.45
-        updateModel()
+        updateModel(serverLevel)
         bossEvent.progress = (health / maxHealth).coerceIn(0f, 1f)
         if (variant == Variant.HUNTER && SpiderConfig.hunterBlindnessRange.get() > 0 && tickCount % 20 == 0) {
             serverLevel.players().filter { it.distanceTo(this) <= SpiderConfig.hunterBlindnessRange.get() }.forEach {
@@ -434,7 +436,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         Variant.NETHERITE -> Blocks.NETHERITE_BLOCK.defaultBlockState()
     }
 
-    private fun updateModel() {
+    private fun updateModel(level: ServerLevel) {
         val layouts = legLayouts()
         if (parts.size != layouts.size * 3) return
         val scale = currentScale
@@ -448,9 +450,23 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val lift = max(0.0, sin(pairPhase)) * 0.2 * scale
             val root = anchor.add(forward.scale(leg.rootZ * scale))
                 .add(right.scale(leg.side * 0.18 * scale))
-            val foot = Vec3(x, y + 0.04 * scale + lift, z)
+            val plannedFoot = Vec3(x, y + 0.04 * scale + lift, z)
                 .add(right.scale(leg.side * leg.restX * scale))
                 .add(forward.scale((leg.restZ + stride) * scale))
+            val groundHit = level.clip(
+                ClipContext(
+                    plannedFoot.add(0.0, 1.5 * scale, 0.0),
+                    plannedFoot.add(0.0, -1.25 * scale, 0.0),
+                    ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE,
+                    this
+                )
+            )
+            val foot = if (groundHit.type == HitResult.Type.BLOCK) {
+                groundHit.location.add(0.0, 0.025 * scale, 0.0)
+            } else {
+                plannedFoot
+            }
             val firstJoint = root.lerp(foot, 0.28)
                 .add(right.scale(leg.side * leg.reach * 0.42 * scale))
                 .add(0.0, -0.12 * scale, 0.0)
