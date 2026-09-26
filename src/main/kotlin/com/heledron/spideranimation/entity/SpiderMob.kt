@@ -310,7 +310,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     if (SpiderConfig.growInWater.get()) waterGrowthScale(serverLevel) ?: 0.0 else 0.0
                 )
             }
-            currentScale += (idleScale - currentScale) * 0.03
+            approachScale(idleScale)
             wander(serverLevel)
             return
         }
@@ -360,8 +360,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (variant != Variant.HUNTER) {
             passageScaleCap()?.let { desiredScale = min(desiredScale, it) }
         }
-        val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
-        currentScale += (desiredScale - currentScale) * adjustment
+        approachScale(desiredScale)
 
         val dx = target.x - x
         val dz = target.z - z
@@ -478,6 +477,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
         return if (opening.alongX) Vec3(waypointAlong, opening.y, opening.z)
         else Vec3(opening.x, opening.y, waypointAlong)
+    }
+
+    private fun approachScale(targetScale: Double) {
+        val linearStep = currentScale + (targetScale - currentScale) * 0.3
+        val minimum = currentScale / (1.0 + SpiderConfig.shrinkPercentPerTick.get() / 100.0)
+        val maximum = currentScale * (1.0 + SpiderConfig.growPercentPerTick.get() / 100.0)
+        currentScale = linearStep.coerceIn(minimum, maximum)
     }
 
     private fun isLookingAt(player: Player): Boolean {
