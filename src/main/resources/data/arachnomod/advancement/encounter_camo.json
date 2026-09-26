@@ -3,7 +3,7 @@
   "display": {
     "icon": { "item": "minecraft:moss_block" },
     "title": { "text": "If It Bleeds, We Can Kill It" },
-    "description": { "text": "Find the Camo variant—or notice that a piece of scenery has been following you." },
+    "description": { "text": "Find the Camo variant - or rather, notice that a piece of the scenery has been following you." },
     "frame": "task", "show_toast": true, "announce_to_chat": true, "hidden": false
   },
   "criteria": { "impossible": { "trigger": "minecraft:impossible" } },
