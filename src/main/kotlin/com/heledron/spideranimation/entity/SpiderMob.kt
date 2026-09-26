@@ -890,7 +890,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         var bodyForward = bodyRight.cross(supportNormal).normalize()
         if (bodyForward.dot(forward) < 0.0) bodyForward = bodyForward.scale(-1.0)
 
-        val supportFootHeight = average(footPositions.filterNotNull())?.y
+        val supportFootHeight = average(layouts.indices.mapNotNull { footStepTargets[it] ?: footPositions[it] })?.y
         if (supportFootHeight != null) {
             val preferredOffset = supportFootHeight - y
             // The original gait corrects body height by 25% toward mean leg target height.
