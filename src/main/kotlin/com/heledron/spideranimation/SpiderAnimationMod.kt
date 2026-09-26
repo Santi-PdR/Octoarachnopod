@@ -25,7 +25,7 @@ class SpiderAnimationMod {
     }
 
     private fun registerAttributes(event: EntityAttributeCreationEvent) {
-        event.put(ModEntities.SPIDER.get(), SpiderMob.createAttributes())
+        event.put(ModEntities.SPIDER.get(), SpiderMob.createAttributes().build())
     }
 
     private fun addCreativeItems(event: BuildCreativeModeTabContentsEvent) {

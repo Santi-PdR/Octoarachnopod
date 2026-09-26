@@ -7,6 +7,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.level.saveddata.SavedData
 import kotlin.math.cos
 import kotlin.math.sin
@@ -43,14 +44,16 @@ object SpiderSpawnManager {
             val distance = Random.nextDouble(minDistance, maxDistance)
             val x = player.x + cos(angle) * distance
             val z = player.z + sin(angle) * distance
-            val y = overworld.getHeight(Level.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt())
+            val y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt())
             val pos = BlockPos(x.toInt(), y, z.toInt())
             if (!overworld.getBlockState(pos).isAir || !overworld.getFluidState(pos).isEmpty ||
                 !overworld.getBlockState(pos.below()).blocksMotion()
             ) return@repeat
-            val spider = ModEntities.SPIDER.get().create(overworld, null, pos, MobSpawnType.NATURAL, false, false) ?: return@repeat
+            val spider = ModEntities.SPIDER.get().create(overworld) ?: return@repeat
+            spider.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null)
             spider.moveTo(x, y.toDouble(), z, Random.nextFloat() * 360f, 0f)
             spider.naturalEncounter = true
+            spider.chooseVariant()
             if (overworld.addFreshEntity(spider)) {
                 data.spiderId = spider.uuid
                 data.everSpawned = true
