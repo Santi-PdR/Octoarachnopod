@@ -4,6 +4,7 @@ import com.heledron.spideranimation.ModItems
 import com.heledron.spideranimation.SpiderConfig
 import com.heledron.spideranimation.SpiderSpawnManager
 import com.heledron.spideranimation.SpiderAdvancements
+import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
