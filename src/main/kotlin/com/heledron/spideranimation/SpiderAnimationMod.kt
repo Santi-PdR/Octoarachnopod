@@ -130,12 +130,14 @@ class SpiderAnimationMod {
                     .executes { context ->
                         setConfigValueFromCommand(path, entry, BoolArgumentType.getBool(context, "value").toString(), context.source)
                     }
-                is Int -> Commands.argument("value", IntegerArgumentType.integer())
-                    .executes { context ->
+                is Int -> SpiderConfig.commandIntegerRanges.getValue(path).let { range ->
+                    Commands.argument("value", IntegerArgumentType.integer(range.first, range.last))
+                }.executes { context ->
                         setConfigValueFromCommand(path, entry, IntegerArgumentType.getInteger(context, "value").toString(), context.source)
                     }
-                is Double -> Commands.argument("value", DoubleArgumentType.doubleArg())
-                    .executes { context ->
+                is Double -> SpiderConfig.commandDoubleRanges.getValue(path).let { range ->
+                    Commands.argument("value", DoubleArgumentType.doubleArg(range.first, range.second))
+                }.executes { context ->
                         setConfigValueFromCommand(path, entry, DoubleArgumentType.getDouble(context, "value").toString(), context.source)
                     }
                 is String -> Commands.argument("value", ResourceLocationArgument.id())
