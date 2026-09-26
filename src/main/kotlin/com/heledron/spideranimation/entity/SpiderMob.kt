@@ -105,8 +105,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     override fun shouldBeSaved(): Boolean = false
     override fun fireImmune(): Boolean = variant == Variant.NETHERITE
 
-    override fun getPassengerAttachmentPoint(entity: Entity, dimensions: EntityDimensions, partialTick: Float): Vector3f =
-        Vector3f(0f, (0.25 * currentScale + 0.2).toFloat(), 0f)
+    override fun getPassengersRidingOffset(): Double = 0.25 * currentScale + 0.2
 
     override fun getDimensions(pose: Pose): EntityDimensions {
         val scale = currentScale.coerceAtLeast(0.01).toFloat()
