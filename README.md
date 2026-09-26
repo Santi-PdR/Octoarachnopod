@@ -1,9 +1,5 @@
 # Octoarachnopod — Forge 1.20.1
 
-Port in progress of ArachnoMod 1.8.4 for Minecraft Forge 1.20.1.
+Forge port of ArachnoMod 1.8.4. The user has confirmed permission from the rights holder to make and publish this port.
 
-The original mod is by iR3DN4X and is based on TheCymaera's `minecraft-spider`. The project is being ported with the rights and permission supplied by the user.
-
-The goal is to preserve the Netherite Octoarachnopod encounter, procedural display-based spider animation, variants, AI, taming/control item, configuration, and advancements while adapting the APIs to Forge 1.20.1.
-
-This repository is the Forge port; the source mod targets NeoForge 26.1.2.
+The port retains attribution to iR3DN4X and TheCymaera. The source JAR is the behavior reference; implementation is being adapted to Forge 1.20.1 rather than NeoForge 26.1.2.
