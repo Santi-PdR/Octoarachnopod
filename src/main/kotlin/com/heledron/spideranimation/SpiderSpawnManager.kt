@@ -8,6 +8,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.Difficulty
+import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.levelgen.Heightmap
@@ -70,6 +71,41 @@ object SpiderSpawnManager {
                 .toList()
                 .forEach { it.discard() }
         }
+    }
+
+    fun onUnexpectedRemoval(spider: SpiderMob, reason: Entity.RemovalReason) {
+        if (reason.shouldDestroy() || spider.health <= 0.0f || spider.personalOwner != null) return
+        val level = spider.level() as? ServerLevel ?: return
+        val server = level.server
+        if (activeServer !== server) return
+        val data = HuntData.get(server.overworld())
+        if (data.spiderId != spider.uuid) return
+
+        data.abandonedTicks = 0
+        data.strandedTicks = 0
+        if (server.overworld().difficulty == Difficulty.PEACEFUL) {
+            data.spiderId = null
+            data.setDirty()
+            return
+        }
+
+        val nearestPlayer = server.playerList.players
+            .filter { it.isAlive }
+            .minByOrNull { it.distanceToSqr(spider) }
+        val replacement = nearestPlayer?.let(::spawnNear)
+        if (replacement != null) {
+            data.spiderId = replacement.uuid
+            data.everSpawned = true
+            data.remainingTicks = 0
+            data.scheduleKind = "NONE"
+            data.scheduleElapsed = 0
+        } else {
+            data.spiderId = null
+            data.remainingTicks = 200
+            data.scheduleKind = "RETRY"
+            data.scheduleElapsed = 0
+        }
+        data.setDirty()
     }
 
     fun tick(server: MinecraftServer) {
