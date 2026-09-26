@@ -24,6 +24,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext
 class SpiderAnimationMod {
     init {
         val bus: IEventBus = FMLJavaModLoadingContext.get().modEventBus
+        SpiderNetwork.register()
         ModEntities.ENTITY_TYPES.register(bus)
         ModItems.ITEMS.register(bus)
         bus.addListener(::registerAttributes)
