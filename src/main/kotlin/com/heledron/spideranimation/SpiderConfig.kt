@@ -187,7 +187,7 @@ object SpiderConfig {
                     }
                     config.remove<Any>("attackDamageHearts")
                 }
-                config.set("configVersion", 5)
+                config.set<Any>("configVersion", 5)
                 config.save()
             }
         }
