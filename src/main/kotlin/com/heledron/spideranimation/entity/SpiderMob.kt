@@ -102,6 +102,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
     override fun registerGoals() = Unit
     override fun removeWhenFarAway(distance: Double): Boolean = false
+    override fun shouldBeSaved(): Boolean = false
+    override fun fireImmune(): Boolean = variant == Variant.NETHERITE
 
     override fun getDimensions(pose: Pose): EntityDimensions {
         val scale = currentScale.coerceAtLeast(0.01).toFloat()
