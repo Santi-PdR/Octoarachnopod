@@ -147,7 +147,7 @@ object SpiderSpawnManager {
         val minDistance = SpiderConfig.spawnDistanceMin.get()
         val maxDistance = maxOf(minDistance, SpiderConfig.spawnDistanceMax.get())
         val angleAttempts = SpiderConfig.spawnAngleAttempts.get()
-        val chosenDistance = Random.nextDouble(minDistance, maxDistance)
+        val chosenDistance = minDistance + Random.nextDouble() * (maxDistance - minDistance)
         val candidateRadii = mutableListOf(chosenDistance)
         var offset = 2.0
         while (chosenDistance + offset <= maxDistance || chosenDistance - offset >= minDistance) {
