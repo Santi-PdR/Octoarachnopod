@@ -10,7 +10,7 @@ object ModItems {
     val ITEMS: DeferredRegister<Item> =
         DeferredRegister.create(ForgeRegistries.ITEMS, SpiderAnimationMod.MOD_ID)
     val SPIDER_SPAWN_EGG: RegistryObject<SpawnEggItem> = ITEMS.register("spider_spawn_egg") {
-        SpawnEggItem(ModEntities.SPIDER.get(), 0x28252C, 0xA37A28, Item.Properties())
+        SpawnEggItem(ModEntities.SPIDER.get(), 0xFFFFFF, 0xFFFFFF, Item.Properties())
     }
     val SPIDER_TAMER: RegistryObject<Item> = ITEMS.register("spider_tamer") {
         Item(Item.Properties().stacksTo(1))
