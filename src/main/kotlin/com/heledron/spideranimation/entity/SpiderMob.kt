@@ -44,6 +44,7 @@ import kotlin.math.sin
 
 class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, level) {
     enum class Variant { NETHERITE, CAMO, POISON, HUNTER }
+    private enum class AiMode { WANDER, ALERT, CHASE }
 
     var variant: Variant = Variant.NETHERITE
         private set
@@ -57,6 +58,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     var personalSize = 1.0
         private set
     private var attackTimer = 0
+    private var aiMode = AiMode.WANDER
     private var alertTimer = 0
     private var phase = 0.0
     private var currentScale = 1.0
@@ -255,9 +257,17 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val target = serverLevel.players()
             .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || night) }
             .minByOrNull { it.distanceToSqr(this) }
-        if (target == null || distanceTo(target) > SpiderConfig.chaseDistance.get() * SpiderConfig.chaseExitMultiplier.get()) {
+        val distance = target?.let(::distanceTo) ?: Double.MAX_VALUE
+        val detectionDistance = SpiderConfig.chaseDistance.get()
+        val allowedDistance = if (aiMode == AiMode.WANDER) {
+            detectionDistance
+        } else {
+            detectionDistance * SpiderConfig.chaseExitMultiplier.get()
+        }
+        if (target == null || distance > allowedDistance) {
             navigation.stop()
             setTarget(null)
+            aiMode = AiMode.WANDER
             alertTimer = 0
             val idleScale = when (variant) {
                 Variant.POISON -> SpiderConfig.poisonSize.get()
@@ -270,7 +280,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
 
         setTarget(target)
-        val distance = distanceTo(target)
+        if (aiMode == AiMode.WANDER) {
+            aiMode = AiMode.ALERT
+            alertTimer = SpiderConfig.alertReactionTicks.get()
+        }
+        if (aiMode == AiMode.ALERT) {
+            navigation.stop()
+            if (alertTimer > 0) {
+                alertTimer--
+                return
+            }
+            aiMode = AiMode.CHASE
+        }
         val near = SpiderConfig.sizeNearDistance.get()
         val far = max(near + 0.01, SpiderConfig.sizeFarDistance.get())
         val desiredScale = when (variant) {
@@ -288,15 +309,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val yaw = Math.toDegrees(atan2(-dx, dz)).toFloat()
         setYRot(yaw)
         yRotO = yaw
-        if (alertTimer == 0) alertTimer = SpiderConfig.alertReactionTicks.get()
-        if (alertTimer > 0) {
-            navigation.stop()
-            alertTimer--
-            return
-        }
-        if (variant == Variant.HUNTER && target.hasLineOfSight(this)) {
+        if (variant == Variant.HUNTER && distance <= 6.0 && target.hasLineOfSight(this)) {
             val toSpider = Vec3(x - target.x, y + 1.0 - target.eyeY, z - target.z).normalize()
-            if (target.lookAngle.dot(toSpider) > 0.82) {
+            if (target.lookAngle.dot(toSpider) > 0.7) {
                 navigation.stop()
                 return
             }
