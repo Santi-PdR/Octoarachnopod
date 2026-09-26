@@ -159,6 +159,17 @@ class SpiderAnimationMod {
         return root
     }
 
+    @Suppress("UNCHECKED_CAST")
+    private fun setConfigValue(entry: ForgeConfigSpec.ConfigValue<*>, raw: String) {
+        when (entry.get()) {
+            is Boolean -> (entry as ForgeConfigSpec.ConfigValue<Boolean>).set(raw.toBooleanStrict())
+            is Int -> (entry as ForgeConfigSpec.ConfigValue<Int>).set(raw.toInt())
+            is Double -> (entry as ForgeConfigSpec.ConfigValue<Double>).set(raw.toDouble())
+            is String -> (entry as ForgeConfigSpec.ConfigValue<String>).set(raw)
+            else -> throw IllegalArgumentException("Unsupported config value type.")
+        }
+    }
+
     private fun setConfigValueFromCommand(
         path: String,
         entry: ForgeConfigSpec.ConfigValue<*>,
