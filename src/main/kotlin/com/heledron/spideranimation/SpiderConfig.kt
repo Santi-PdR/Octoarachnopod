@@ -147,8 +147,7 @@ object SpiderConfig {
         val file = configDir.resolve("arachnomod-common.toml")
         if (!Files.exists(file)) return
 
-        runCatching {
-            CommentedFileConfig.builder(file).preserveInsertionOrder().build().use { config ->
+        CommentedFileConfig.builder(file).preserveInsertionOrder().build().use { config ->
                 config.load()
                 val hasContent = config.get<Any>("spawnMinMinutes") != null
                 val fileVersion = (config.get<Number>("configVersion")?.toInt())
@@ -189,7 +188,6 @@ object SpiderConfig {
                 }
                 config.set<Any>("configVersion", 5)
                 config.save()
-            }
         }
     }
 
