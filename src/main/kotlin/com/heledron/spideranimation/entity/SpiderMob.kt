@@ -186,6 +186,19 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 bossEvent.name = Component.literal("Enraged Netherite Octoarachnopod")
                 bossEvent.color = BossEvent.BossBarColor.RED
                 bossEvent.isVisible = true
+                val serverLevel = level() as ServerLevel
+                serverLevel.playSound(
+                    null, x, y, z, net.minecraft.sounds.SoundEvents.LIGHTNING_BOLT_THUNDER,
+                    net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.4f
+                )
+                serverLevel.sendParticles(
+                    net.minecraft.core.particles.DustParticleOptions.REDSTONE, x, y, z,
+                    60, 1.2 * currentScale, 0.8 * currentScale, 1.2 * currentScale, 0.1
+                )
+                serverLevel.sendParticles(
+                    net.minecraft.core.particles.ParticleTypes.ELECTRIC_SPARK, x, y, z,
+                    40, 1.2 * currentScale, 0.8 * currentScale, 1.2 * currentScale, 0.3
+                )
                 if (player is ServerPlayer) SpiderAdvancements.grant(player, "enrage")
                 if (!player.abilities.instabuild) stack.shrink(1)
             }
@@ -196,9 +209,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             if (!level().isClientSide && !tamed) {
                 tamed = true
                 setTarget(null)
-                (level() as ServerLevel).sendParticles(
+                val serverLevel = level() as ServerLevel
+                serverLevel.sendParticles(
                     net.minecraft.core.particles.ParticleTypes.HEART, x, y + 1.5, z,
                     9, 1.2, 1.2, 1.2, 0.02
+                )
+                serverLevel.playSound(
+                    null, x, y, z, net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,
+                    net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.2f
                 )
             }
             return InteractionResult.sidedSuccess(level().isClientSide)
