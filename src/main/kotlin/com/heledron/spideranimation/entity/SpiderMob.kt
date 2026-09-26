@@ -978,14 +978,12 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 Vector3f(0f, 0f, 1f),
                 Vector3f(bodyForward.x.toFloat(), bodyForward.y.toFloat(), bodyForward.z.toFloat())
             )
+            val bodyScale = Vector3f((0.7 * scale).toFloat(), (0.45 * scale).toFloat(), scale.toFloat())
+            val bodyOffset = Vector3f(-bodyScale.x / 2f, -bodyScale.y / 2f, -bodyScale.z / 2f)
+                .rotate(bodyRotation)
             torso.setPos(anchor.x, anchor.y, anchor.z)
             torso.setTransformation(
-                Transformation(
-                    Vector3f(-0.5f, -0.5f, -0.5f),
-                    bodyRotation,
-                    Vector3f((0.7 * scale).toFloat(), (0.45 * scale).toFloat(), scale.toFloat()),
-                    Quaternionf()
-                )
+                Transformation(bodyOffset, bodyRotation, bodyScale, Quaternionf())
             )
         }
         layouts.forEachIndexed { index, leg ->
@@ -1335,7 +1333,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             Vector3f(direction.x.toFloat(), direction.y.toFloat(), direction.z.toFloat())
         )
         display.setPos((start.x + end.x) / 2.0, (start.y + end.y) / 2.0, (start.z + end.z) / 2.0)
-        display.setTransformation(Transformation(Vector3f(-0.5f, -0.5f, -0.5f), rotation, Vector3f(width, length, width), Quaternionf()))
+        val segmentScale = Vector3f(width, length, width)
+        val segmentOffset = Vector3f(-width / 2f, -length / 2f, -width / 2f).rotate(rotation)
+        display.setTransformation(Transformation(segmentOffset, rotation, segmentScale, Quaternionf()))
     }
 
     override fun remove(reason: Entity.RemovalReason) {
