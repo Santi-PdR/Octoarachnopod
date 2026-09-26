@@ -368,11 +368,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
     }
 
-    private fun stateFor(index: Int): BlockState = when (variant) {
-        Variant.CAMO -> if (index < 3) Blocks.MOSS_BLOCK.defaultBlockState() else Blocks.MOSSY_COBBLESTONE.defaultBlockState()
-        Variant.POISON -> if (index < 3) Blocks.SCULK.defaultBlockState() else Blocks.DEEPSLATE_BRICKS.defaultBlockState()
-        Variant.HUNTER -> Blocks.BLACKSTONE.defaultBlockState()
-        Variant.NETHERITE -> if (index < 3) Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState() else Blocks.POLISHED_BLACKSTONE.defaultBlockState()
+    private fun stateFor(@Suppress("UNUSED_PARAMETER") index: Int): BlockState = when (variant) {
+        Variant.CAMO -> Blocks.MOSS_BLOCK.defaultBlockState()
+        Variant.POISON -> Blocks.WARPED_WART_BLOCK.defaultBlockState()
+        Variant.HUNTER -> Blocks.BLACK_CONCRETE.defaultBlockState()
+        Variant.NETHERITE -> Blocks.NETHERITE_BLOCK.defaultBlockState()
     }
 
     private fun updateModel() {
