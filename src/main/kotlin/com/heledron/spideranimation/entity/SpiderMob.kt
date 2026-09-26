@@ -903,7 +903,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             .add(supportNormal.scale(1.1 * scale))
             .add(0.0, breath, 0.0)
         layouts.forEachIndexed { index, leg ->
-            val pairPhase = phase + (index / 2) * Math.PI
+            val pairIndex = index / 2
+            val isLeftLeg = leg.side < 0.0
+            val diagonalOne = (pairIndex % 2 == 0) == isLeftLeg
+            val pairPhase = phase + if (diagonalOne) 0.0 else Math.PI
             val stride = sin(pairPhase) * 0.25 * scale
             val lift = max(0.0, sin(pairPhase)) * 0.2 * scale
             val root = anchor.add(bodyForward.scale(leg.rootZ * scale))
