@@ -914,8 +914,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             // The source gait places feet from each leg's rest pose and looks ahead
             // along actual motion; it does not swing feet on a global sine phase.
             val horizontalVelocity = deltaMovement.multiply(1.0, 0.0, 1.0)
+            val maxWalkSpeed = (SpiderConfig.chaseSpeed.get().toDouble() / 20.0).coerceAtLeast(1.0e-6)
+            val speedFraction = (deltaMovement.length() / maxWalkSpeed).coerceIn(0.0, 1.0)
+            // The original interpolates the foot trigger radius from 0.25 blocks
+            // at rest to 0.8 while moving, and scales lookahead by that radius.
+            val triggerRadius = 0.25 + (0.8 - 0.25) * speedFraction
             val lookAhead = if (horizontalVelocity.lengthSqr() > 1.0e-6) {
-                horizontalVelocity.normalize().scale(0.48 * scale)
+                horizontalVelocity.normalize().scale(triggerRadius * 0.6 * scale)
             } else Vec3.ZERO
             val plannedFoot = Vec3(x, y + 0.04 * scale, z)
                 .add(right.scale(leg.side * leg.restX * scale))
@@ -927,8 +932,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 footPositions[index] = planted
             }
             if (footStepTargets[index] == null &&
-                planted.subtract(plannedFoot).horizontalDistance() > 0.6 * scale &&
-                canStartLegStep(index, layouts, planted, plannedFoot, scale)
+                planted.subtract(plannedFoot).horizontalDistance() > triggerRadius * scale &&
+                canStartLegStep(index, layouts, planted, plannedFoot, scale, triggerRadius)
             ) {
                 footStepStarts[index] = planted
                 footStepTargets[index] = probeGround(level, plannedFoot, scale)
@@ -1007,7 +1012,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         layouts: List<LegLayout>,
         planted: Vec3?,
         planned: Vec3,
-        scale: Double
+        scale: Double,
+        triggerRadius: Double
     ): Boolean {
         val crossPair = listOf(
             index - 2,
@@ -1032,7 +1038,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             }
         ) return false
 
-        val wantsToMove = planted == null || planted.subtract(planned).horizontalDistance() > 0.6 * scale
+        val wantsToMove = planted == null || planted.subtract(planned).horizontalDistance() > triggerRadius * scale
         val alreadyAtTarget = planted != null && planted.distanceToSqr(planned) < 0.01
         val otherSupport = footPositions.indices.any {
             it != index && footPositions[it] != null && footStepTargets[it] == null
