@@ -856,7 +856,12 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val serverLevel = level() as ServerLevel
             val drop = if (enraged) net.minecraft.world.item.Items.NETHERITE_BLOCK else net.minecraft.world.item.Items.NETHERITE_INGOT
             if (enraged || random.nextDouble() < SpiderConfig.netheriteDropChance.get()) {
-                serverLevel.addFreshEntity(net.minecraft.world.entity.item.ItemEntity(serverLevel, x, y + 0.25, z, net.minecraft.world.item.ItemStack(drop)))
+                val dropY = SafeGroundFinder.findFloorBelow(serverLevel, x, y, z, 16) ?: y
+                val trophy = net.minecraft.world.entity.item.ItemEntity(
+                    serverLevel, x, dropY + 0.25, z, net.minecraft.world.item.ItemStack(drop)
+                )
+                trophy.setDefaultPickUpDelay()
+                serverLevel.addFreshEntity(trophy)
             }
             (lastHurtByPlayer as? ServerPlayer)?.let { killer ->
                 SpiderAdvancements.grant(killer, "slay")
