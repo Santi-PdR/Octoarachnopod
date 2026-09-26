@@ -64,6 +64,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     var personalSize = 1.0
         private set
     private var attackTimer = 0
+    private var trophyRolled = false
     private var blindnessCooldown = 0
     private var lungeTimer = 0
     private var lungeDirection = Vec3.ZERO
@@ -847,30 +848,36 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     override fun remove(reason: Entity.RemovalReason) {
-        if (!level().isClientSide) cleanup()
+        if (!level().isClientSide) {
+            if (reason == Entity.RemovalReason.KILLED || health <= 0.0f) rollTrophy(level() as ServerLevel)
+            cleanup()
+        }
         super.remove(reason)
     }
 
     override fun die(source: DamageSource) {
-        if (!level().isClientSide) {
-            val serverLevel = level() as ServerLevel
-            val drop = if (enraged) net.minecraft.world.item.Items.NETHERITE_BLOCK else net.minecraft.world.item.Items.NETHERITE_INGOT
-            if (enraged || random.nextDouble() < SpiderConfig.netheriteDropChance.get()) {
-                val dropY = SafeGroundFinder.findFloorBelow(serverLevel, x, y, z, 16) ?: y
-                val trophy = net.minecraft.world.entity.item.ItemEntity(
-                    serverLevel, x, dropY + 0.25, z, net.minecraft.world.item.ItemStack(drop)
-                )
-                trophy.setDefaultPickUpDelay()
-                serverLevel.addFreshEntity(trophy)
-            }
-            (lastHurtByPlayer as? ServerPlayer)?.let { killer ->
-                SpiderAdvancements.grant(killer, "slay")
-                if (enraged) SpiderAdvancements.grant(killer, "slay_boss")
-            }
-            SpiderSpawnManager.killed(serverLevel.server)
-        }
+        if (!level().isClientSide) rollTrophy(level() as ServerLevel)
         cleanup()
         super.die(source)
+    }
+
+    private fun rollTrophy(serverLevel: ServerLevel) {
+        if (trophyRolled) return
+        trophyRolled = true
+        val drop = if (enraged) net.minecraft.world.item.Items.NETHERITE_BLOCK else net.minecraft.world.item.Items.NETHERITE_INGOT
+        if (enraged || random.nextDouble() < SpiderConfig.netheriteDropChance.get()) {
+            val dropY = SafeGroundFinder.findFloorBelow(serverLevel, x, y, z, 16) ?: y
+            val trophy = net.minecraft.world.entity.item.ItemEntity(
+                serverLevel, x, dropY + 0.25, z, net.minecraft.world.item.ItemStack(drop)
+            )
+            trophy.setDefaultPickUpDelay()
+            serverLevel.addFreshEntity(trophy)
+        }
+        (lastHurtByPlayer as? ServerPlayer)?.let { killer ->
+            SpiderAdvancements.grant(killer, "slay")
+            if (enraged) SpiderAdvancements.grant(killer, "slay_boss")
+        }
+        SpiderSpawnManager.killed(serverLevel.server)
     }
 
     private fun cleanup() {
