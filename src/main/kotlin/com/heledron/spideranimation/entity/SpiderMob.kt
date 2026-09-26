@@ -984,7 +984,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val bodyOffset = Vector3f(-bodyScale.x / 2f, -bodyScale.y / 2f, -bodyScale.z / 2f)
                 .rotate(bodyRotation)
             torso.setPos(anchor.x, anchor.y, anchor.z)
-            torso.setTransformation(
+            applyDisplayTransformation(
+                torso,
                 Transformation(bodyOffset, bodyRotation, bodyScale, Quaternionf())
             )
         }
@@ -1326,6 +1327,15 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         return if (ground != null) ground to true else planned to false
     }
 
+    private fun applyDisplayTransformation(display: BlockDisplay, transformation: Transformation) {
+        display.setTransformation(transformation)
+        display.setInterpolationDuration(if (display.tickCount == 0) 0 else 1)
+        // Keep the start-delay toggle used by the reference renderer so clients
+        // interpolate every per-tick transform instead of seeing 20 Hz jumps.
+        display.setInterpolationDelay(1)
+        display.setInterpolationDelay(0)
+    }
+
     private fun segment(display: BlockDisplay, start: Vec3, end: Vec3, width: Float) {
         val delta = end.subtract(start)
         val length = delta.length().toFloat().coerceAtLeast(0.01f)
@@ -1337,7 +1347,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         display.setPos((start.x + end.x) / 2.0, (start.y + end.y) / 2.0, (start.z + end.z) / 2.0)
         val segmentScale = Vector3f(width, length, width)
         val segmentOffset = Vector3f(-width / 2f, -length / 2f, -width / 2f).rotate(rotation)
-        display.setTransformation(Transformation(segmentOffset, rotation, segmentScale, Quaternionf()))
+        applyDisplayTransformation(display, Transformation(segmentOffset, rotation, segmentScale, Quaternionf()))
     }
 
     override fun remove(reason: Entity.RemovalReason) {
