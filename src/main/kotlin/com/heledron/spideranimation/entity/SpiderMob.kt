@@ -110,7 +110,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 enraged = true
                 val attr = getAttribute(Attributes.MAX_HEALTH)
                 val oldMax = attr?.baseValue ?: maxHealth.toDouble()
-                val newMax = max(oldMax, 1000.0)
+                val newMax = max(oldMax, SpiderConfig.enragedHealth.get())
                 attr?.baseValue = newMax
                 health = min(maxHealth, health + (newMax - oldMax).toFloat())
                 bossEvent.name = Component.literal("Enraged Netherite Octoarachnopod")
@@ -172,7 +172,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val target = serverLevel.players()
             .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || night) }
             .minByOrNull { it.distanceToSqr(this) }
-        if (target == null || distanceTo(target) > SpiderConfig.chaseDistance.get()) {
+        if (target == null || distanceTo(target) > SpiderConfig.chaseDistance.get() * SpiderConfig.chaseExitMultiplier.get()) {
             setTarget(null)
             alertTimer = 0
             currentScale += (1.0 - currentScale) * 0.03
@@ -187,21 +187,21 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val desiredScale = SpiderConfig.minSize.get() +
             (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
             ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
-        currentScale += (desiredScale - currentScale) * 0.12
+        val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0\n        currentScale += (desiredScale - currentScale) * adjustment
 
         val dx = target.x - x
         val dz = target.z - z
         val yaw = Math.toDegrees(atan2(-dx, dz)).toFloat()
         setYRot(yaw)
         yRotO = yaw
-        if (alertTimer == 0) alertTimer = 10
+        if (alertTimer == 0) alertTimer = SpiderConfig.alertReactionTicks.get()
         if (alertTimer > 0) {
             alertTimer--
             return
         }
 
         val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * 7.0
-        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed
+        val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0\n        val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0\n        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
         val direction = Vec3(dx, 0.0, dz).normalize()
         setPos(x + direction.x * speed, y, z + direction.z * speed)
 
@@ -213,8 +213,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 Variant.CAMO -> 8f
             }
             if (target.hurt(damageSources().mobAttack(this), damage)) {
-                if (variant == Variant.POISON) target.addEffect(MobEffectInstance(MobEffects.POISON, 120, 1))
-                if (variant == Variant.HUNTER) target.addEffect(MobEffectInstance(MobEffects.BLINDNESS, 60, 0))
+                if (variant == Variant.POISON) target.addEffect(MobEffectInstance(MobEffects.POISON, (SpiderConfig.poisonEffectSeconds.get() * 20).toInt(), 1))
+                if (variant == Variant.HUNTER) target.addEffect(MobEffectInstance(MobEffects.BLINDNESS, (SpiderConfig.hunterBlindnessSeconds.get() * 20).toInt(), 0))
                 attackTimer = SpiderConfig.attackCooldown.get()
             }
         }
@@ -305,7 +305,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (!level().isClientSide) {
             val serverLevel = level() as ServerLevel
             val drop = if (enraged) net.minecraft.world.item.Items.NETHERITE_BLOCK else net.minecraft.world.item.Items.NETHERITE_INGOT
-            if (enraged || random.nextDouble() < 0.6) {
+            if (enraged || random.nextDouble() < SpiderConfig.netheriteDropChance.get()) {
                 serverLevel.addFreshEntity(net.minecraft.world.entity.item.ItemEntity(serverLevel, x, y + 0.25, z, net.minecraft.world.item.ItemStack(drop)))
             }
             (lastHurtByPlayer as? ServerPlayer)?.let { killer ->
@@ -330,6 +330,6 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             .add(Attributes.ARMOR, 16.0)
             .add(Attributes.MOVEMENT_SPEED, 0.35)
             .add(Attributes.ATTACK_DAMAGE, 12.0)
-            .add(Attributes.KNOCKBACK_RESISTANCE, 0.8)
+            .add(Attributes.KNOCKBACK_RESISTANCE, SpiderConfig.netheriteKnockbackResistance.get())
     }
 }
