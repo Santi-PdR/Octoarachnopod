@@ -9,6 +9,7 @@ import net.minecraftforge.eventbus.api.IEventBus
 import net.minecraftforge.event.TickEvent
 import net.minecraftforge.event.RegisterCommandsEvent
 import net.minecraft.commands.Commands
+import net.minecraft.world.phys.AABB
 import net.minecraft.network.chat.Component
 import net.minecraftforge.fml.ModLoadingContext
 import net.minecraftforge.fml.common.Mod
@@ -63,11 +64,9 @@ class SpiderAnimationMod {
                 }))
                 .then(Commands.literal("release").executes { context ->
                     val player = context.source.playerOrException
-                    val removed = context.source.server.allLevels
-                        .flatMap { it.getEntitiesOfClass(SpiderMob::class.java) }
-                        .filter { it.personalOwner == player.uuid }
-                        .onEach { it.discard() }
-                        .count()
+                    val ownedSpiders = personalSpiders(player)
+                    ownedSpiders.forEach { it.discard() }
+                    val removed = ownedSpiders.size
                     if (removed > 0) {
                         context.source.sendSuccess({ Component.literal("Spider released.") }, false)
                         1
@@ -78,9 +77,7 @@ class SpiderAnimationMod {
                 })
                 .then(Commands.literal("size").then(Commands.argument("size", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.3, 20.0)).executes { context ->
                     val player = context.source.playerOrException
-                    val spider = context.source.server.allLevels.asSequence()
-                        .flatMap { it.getEntitiesOfClass(SpiderMob::class.java).asSequence() }
-                        .firstOrNull { it.personalOwner == player.uuid }
+                    val spider = personalSpiders(player).firstOrNull()
                     if (spider == null) {
                         context.source.sendFailure(Component.literal("You have no personal spider. Use /spider newinstance first."))
                         0
@@ -94,10 +91,15 @@ class SpiderAnimationMod {
         )
     }
 
+    private fun personalSpiders(player: net.minecraft.server.level.ServerPlayer): List<SpiderMob> {
+        val searchBox = player.boundingBox.inflate(128.0)
+        return player.server.allLevels
+            .flatMap { level -> level.getEntitiesOfClass(SpiderMob::class.java, searchBox) }
+            .filter { it.personalOwner == player.uuid }
+    }
+
     private fun spawnPersonalSpider(player: net.minecraft.server.level.ServerPlayer, size: Double) {
-        player.server.allLevels.forEach { level ->
-            level.getEntitiesOfClass(SpiderMob::class.java).filter { it.personalOwner == player.uuid }.forEach { it.discard() }
-        }
+        personalSpiders(player).forEach { it.discard() }
         val level = player.serverLevel()
         val spider = ModEntities.SPIDER.get().create(level) ?: return
         spider.moveTo(player.x, player.y + 1.0, player.z, player.yRot, 0f)
