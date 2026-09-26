@@ -85,10 +85,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         level: ServerLevelAccessor,
         difficulty: DifficultyInstance,
         spawnType: MobSpawnType,
-        spawnGroupData: SpawnGroupData?
+        spawnGroupData: SpawnGroupData?,
+        tag: net.minecraft.nbt.CompoundTag?
     ): SpawnGroupData? {
         if (spawnType == MobSpawnType.SPAWN_EGG) chooseVariant()
-        return super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData)
+        return super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData, tag)
     }
 
     fun chooseVariant() {

@@ -50,7 +50,7 @@ object SpiderSpawnManager {
                 !overworld.getBlockState(pos.below()).blocksMotion()
             ) return@repeat
             val spider = ModEntities.SPIDER.get().create(overworld) ?: return@repeat
-            spider.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null)
+            spider.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
             spider.moveTo(x, y.toDouble(), z, Random.nextFloat() * 360f, 0f)
             spider.naturalEncounter = true
             spider.chooseVariant()
