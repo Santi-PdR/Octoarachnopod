@@ -282,8 +282,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         super.tick()
         if (level().isClientSide) return
         val serverLevel = level() as? ServerLevel ?: return
-        if (isOnGround && !wasOnGround) playLandingSound(serverLevel)
-        wasOnGround = isOnGround
+        if (onGround() && !wasOnGround) playLandingSound(serverLevel)
+        wasOnGround = onGround()
         ensureModel(serverLevel)
         if (tickCount % 20 == 0) grantEncounterAdvancements(serverLevel)
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
