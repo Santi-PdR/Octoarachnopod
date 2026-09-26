@@ -100,6 +100,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         bossEvent.isVisible = false
         setNoGravity(true)
         setInvisible(true)
+        applyVariantStats()
     }
 
     override fun registerGoals() = Unit
@@ -1015,9 +1016,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     companion object {
         fun createAttributes(): AttributeSupplier.Builder = Monster.createMonsterAttributes()
             .add(Attributes.MAX_HEALTH, 600.0)
-            .add(Attributes.ARMOR, 16.0)
-            .add(Attributes.MOVEMENT_SPEED, 0.35)
+            .add(Attributes.ARMOR, 0.0)
+            .add(Attributes.ARMOR_TOUGHNESS, 0.0)
+            .add(Attributes.MOVEMENT_SPEED, 0.3)
             .add(Attributes.ATTACK_DAMAGE, 12.0)
-            .add(Attributes.KNOCKBACK_RESISTANCE, SpiderConfig.netheriteKnockbackResistance.get())
+            .add(Attributes.FOLLOW_RANGE, 64.0)
+            .add(Attributes.KNOCKBACK_RESISTANCE, 0.0)
     }
 }
