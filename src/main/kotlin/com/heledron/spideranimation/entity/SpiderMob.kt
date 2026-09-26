@@ -297,12 +297,19 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (lungeTimer > 0) lungeTimer--
         if (!tamed && !SpiderConfig.enableWandering.get() && deltaMovement.horizontalDistanceSqr() < 0.001) {
             stationaryTicks++
-            if (groomingTimer <= 0 && stationaryTicks > 60 &&
+            if (groomingTimer <= 0 && footStepTargets.getOrNull(0) == null &&
+                footStepTargets.getOrNull(1) == null && stationaryTicks > 60 &&
                 random.nextDouble() < SpiderConfig.groomingChance.get() / 20.0
-            ) groomingTimer = 100
+            ) {
+                groomingOriginalLeft = footPositions.getOrNull(0)
+                groomingOriginalRight = footPositions.getOrNull(1)
+                if (groomingOriginalLeft != null && groomingOriginalRight != null) groomingTimer = 100
+            }
         } else {
             stationaryTicks = 0
             groomingTimer = 0
+            groomingOriginalLeft = null
+            groomingOriginalRight = null
         }
         if (groomingTimer > 0) groomingTimer--
         val scaleBeforeUpdate = currentScale
@@ -982,12 +989,21 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 val progress = 1.0 - groomingTimer / 100.0
                 val edge = ((progress / 0.2).coerceAtMost(1.0) * ((1.0 - progress) / 0.2).coerceAtMost(1.0)).coerceIn(0.0, 1.0)
                 val smooth = edge * edge * (3.0 - 2.0 * edge)
-                val mouth = anchor.add(forward.scale(0.5 * scale)).add(0.0, -0.05 * scale, 0.0)
+                val bodyPosition = Vec3(x, y, z)
+                val mouth = bodyPosition.add(forward.scale(0.5 * scale)).add(supportNormal.scale(-0.05 * scale))
                 val sideSign = if (index == 0) -1.0 else 1.0
-                val rub = if (progress in 0.2..0.8) 1.0 else 0.0
-                mouth.add(right.scale(0.15 * sideSign * scale))
-                    .add(0.0, sin(smooth * Math.PI) * 0.4 * scale + sin(progress * Math.PI * 6.0) * 0.08 * scale * rub, 0.0)
+                val rub = when {
+                    progress < 0.2 || progress > 0.8 -> 0.0
+                    progress < 0.3 -> (progress - 0.2) / 0.1
+                    progress > 0.7 -> (0.8 - progress) / 0.1
+                    else -> 1.0
+                }
+                val target = mouth.add(right.scale(0.15 * sideSign * scale))
+                    .add(supportNormal.scale(sin(progress * Math.PI * 6.0) * 0.08 * scale * rub))
                     .add(forward.scale(cos(progress * Math.PI * 6.0) * 0.04 * scale * rub))
+                val original = if (index == 0) groomingOriginalLeft else groomingOriginalRight
+                val arc = supportNormal.scale(sin(smooth * Math.PI) * 0.4 * scale)
+                (original ?: planted).lerp(target, smooth).add(arc))
             } else if (destination != null) {
                 // Match Leg.updateMovement from the original: travel at the
                 // configured world-units-per-tick speed, lift while traversing,
