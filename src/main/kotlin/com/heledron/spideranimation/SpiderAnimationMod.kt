@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import net.minecraft.commands.CommandSourceStack
 import com.heledron.spideranimation.entity.SpiderMob
+import net.minecraft.world.entity.Display.BlockDisplay
 import net.minecraft.world.item.CreativeModeTabs
 import net.minecraftforge.common.ForgeConfigSpec
 import net.minecraftforge.common.MinecraftForge
@@ -12,6 +13,7 @@ import net.minecraftforge.event.entity.EntityAttributeCreationEvent
 import net.minecraftforge.eventbus.api.IEventBus
 import net.minecraftforge.event.TickEvent
 import net.minecraftforge.event.RegisterCommandsEvent
+import net.minecraftforge.event.server.ServerStoppingEvent
 import net.minecraft.commands.Commands
 import net.minecraft.world.phys.AABB
 import net.minecraft.network.chat.Component
@@ -31,6 +33,7 @@ class SpiderAnimationMod {
         bus.addListener(::addCreativeItems)
         MinecraftForge.EVENT_BUS.addListener(::onServerTick)
         MinecraftForge.EVENT_BUS.addListener(::onRegisterCommands)
+        MinecraftForge.EVENT_BUS.addListener(::onServerStopping)
         SpiderConfig.migrateConfigFile(net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get())
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SpiderConfig.SPEC)
     }
@@ -167,6 +170,17 @@ class SpiderAnimationMod {
         spider.moveTo(player.x, player.y + 1.0, player.z, player.yRot, 0f)
         spider.makePersonal(player.uuid, size)
         level.addFreshEntity(spider)
+    }
+
+    private fun onServerStopping(event: ServerStoppingEvent) {
+        event.server.allLevels.forEach { level ->
+            level.getAllEntities()
+                .filterIsInstance<BlockDisplay>()
+                .filter { it.getTags().contains("arachnomod_part") }
+                .toList()
+                .forEach { it.discard() }
+        }
+        SpiderSpawnManager.onServerStopping(event.server)
     }
 
     private fun onServerTick(event: TickEvent.ServerTickEvent) {
