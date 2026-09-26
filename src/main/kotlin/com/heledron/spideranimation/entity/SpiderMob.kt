@@ -370,9 +370,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         yRotO = yaw
         if (variant == Variant.HUNTER) {
             val horizontalDistance = kotlin.math.sqrt(dx * dx + dz * dz)
-            val playerLooksFromFarAway = serverLevel.players().any {
-                it.distanceTo(this) > 6.0 && isLookingAt(it)
-            }
+            val playerLooksFromFarAway = distance > 6.0 && serverLevel.players().any(::isLookingAt)
             val cannotReachPlayerHeight = kotlin.math.abs((y - 1.1 * currentScale) - target.y) > 2.0 &&
                 horizontalDistance < 8.0
             if (playerLooksFromFarAway || cannotReachPlayerHeight) {
@@ -445,8 +443,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             if (hit.type == HitResult.Type.BLOCK) {
                 val groundY = SafeGroundFinder.groundYAt(level, hit.location.x, hit.location.z, y)
                 if (groundY != null) {
+                    val minimumOpeningHeight = if (variant == Variant.HUNTER) 2 else 1
                     opening = SafeGroundFinder.collectOpenings(
-                        level, hit.location.x, hit.location.z, groundY, target.x, target.z
+                        level, hit.location.x, hit.location.z, groundY, target.x, target.z,
+                        minHeight = minimumOpeningHeight
                     ).firstOrNull()
                     if (opening != null) {
                         committedOpening = opening
