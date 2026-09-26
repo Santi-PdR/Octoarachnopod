@@ -85,6 +85,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var stationaryTicks = 0
     private var groomingTimer = 0
     private val parts = mutableListOf<BlockDisplay>()
+    private var riderInputForward = 0.0
+    private var riderInputStrafe = 0.0
+    private var riderInputReceivedAt = Long.MIN_VALUE
     private val footPositions = mutableListOf<Vec3?>()
     private val footStepStarts = mutableListOf<Vec3?>()
     private val footStepTargets = mutableListOf<Vec3?>()
@@ -176,6 +179,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         personalSize = size.coerceIn(0.3, 20.0)
         currentScale = personalSize
         refreshDimensions()
+    }
+
+    fun setRiderInput(playerId: UUID, forward: Float, strafe: Float) {
+        if (!tamed || firstPassenger?.uuid != playerId) return
+        riderInputForward = forward.coerceIn(-1f, 1f).toDouble()
+        riderInputStrafe = strafe.coerceIn(-1f, 1f).toDouble()
+        riderInputReceivedAt = tickCount.toLong()
     }
 
     override fun mobInteract(player: Player, hand: InteractionHand): InteractionResult {
@@ -287,8 +297,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (tamed && rider != null) {
             navigation.stop()
             setYRot(rider.yRot)
-            val forward = rider.zza
-            val strafe = rider.xxa
+            val inputFresh = tickCount.toLong() - riderInputReceivedAt <= 4L
+            val forward = if (inputFresh) riderInputForward else 0.0
+            val strafe = if (inputFresh) riderInputStrafe else 0.0
             val yaw = Math.toRadians(rider.yRot.toDouble())
             val input = Vec3(-sin(yaw) * forward + cos(yaw) * strafe, 0.0, cos(yaw) * forward + sin(yaw) * strafe)
             val movement = if (input.lengthSqr() > 1.0e-6) {
