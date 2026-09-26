@@ -876,6 +876,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val display = BLOCK_DISPLAY.create(level) ?: return@repeat
             display.setBlockState(stateFor(index))
             display.setNoGravity(true)
+            display.setViewRange(4.0f)
             display.noPhysics = true
             display.setInvulnerable(true)
             display.addTag("arachnomod_part")
@@ -885,6 +886,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val torso = BLOCK_DISPLAY.create(level) ?: return
         torso.setBlockState(Blocks.NETHERITE_BLOCK.defaultBlockState())
         torso.setNoGravity(true)
+        torso.setViewRange(4.0f)
         torso.noPhysics = true
         torso.setInvulnerable(true)
         torso.addTag("arachnomod_part")
