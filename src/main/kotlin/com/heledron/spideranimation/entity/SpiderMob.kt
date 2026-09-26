@@ -492,6 +492,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 lungeDirection = Vec3(dx, 0.0, dz).normalize()
                 if (lungeDirection.lengthSqr() > 1.0e-8) {
                     lungeTimer = 14
+                    for (legIndex in 0..1) {
+                        if (legIndex < footStepTargets.size) {
+                            footStepStarts[legIndex] = null
+                            footStepTargets[legIndex] = null
+                            footStepTargetGrounded[legIndex] = false
+                            footGrounded[legIndex] = false
+                        }
+                    }
                     attackTimer = SpiderConfig.attackCooldown.get()
                 }
             } else if (lungeTimer in 1..6 && target.distanceToSqr(this) <= attackReach * attackReach) {
@@ -955,7 +963,22 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 footStepStartedAt[index] = tickCount
             }
             val destination = footStepTargets[index]
-            val foot = if (groomingTimer > 0 && index < 2) {
+            val foot = if (lungeTimer > 0 && index < 2) {
+                val sideDirection = if (index == 0) 1.0 else -1.0
+                val rightOfLunge = Vec3(
+                    -lungeDirection.z,
+                    0.0,
+                    lungeDirection.x
+                )
+                val lungeTarget = Vec3(x, y, z)
+                    .add(lungeDirection.scale(0.9 * scale))
+                    .add(0.0, 0.8 * scale, 0.0)
+                    .add(rightOfLunge.scale(0.35 * sideDirection * scale))
+                val raisedFoot = planted.lerp(lungeTarget, 0.35)
+                footPositions[index] = raisedFoot
+                footGrounded[index] = false
+                raisedFoot
+            } else if (groomingTimer > 0 && index < 2) {
                 val progress = 1.0 - groomingTimer / 100.0
                 val edge = ((progress / 0.2).coerceAtMost(1.0) * ((1.0 - progress) / 0.2).coerceAtMost(1.0)).coerceIn(0.0, 1.0)
                 val smooth = edge * edge * (3.0 - 2.0 * edge)
