@@ -173,7 +173,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     override fun mobInteract(player: Player, hand: InteractionHand): InteractionResult {
         val stack = player.getItemInHand(hand)
         if (stack.item == net.minecraft.world.item.Items.NETHERITE_INGOT &&
-            variant == Variant.NETHERITE && !enraged && level() is ServerLevel
+            variant == Variant.NETHERITE && !tamed && !enraged && level() is ServerLevel
         ) {
             if (!level().isClientSide) {
                 enraged = true
