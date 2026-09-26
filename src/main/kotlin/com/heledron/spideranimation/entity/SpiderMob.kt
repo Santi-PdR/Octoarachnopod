@@ -68,6 +68,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var currentScale = 1.0
     private var wanderTicks = 0
     private var wanderAngle = 0.0
+    private var patrolAnchor: Vec3? = null
+    private var wanderGoal: BlockPos? = null
+    private var wanderGoalExpiresAt = 0
     private val parts = mutableListOf<BlockDisplay>()
     private val footPositions = mutableListOf<Vec3?>()
     private val footStepStarts = mutableListOf<Vec3?>()
@@ -274,6 +277,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             detectionDistance * SpiderConfig.chaseExitMultiplier.get()
         }
         if (target == null || distance > allowedDistance) {
+            if (aiMode != AiMode.WANDER) {
+                patrolAnchor = Vec3(x, y, z)
+                wanderGoal = null
+            }
             navigation.stop()
             setTarget(null)
             aiMode = AiMode.WANDER
@@ -290,6 +297,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
         setTarget(target)
         if (aiMode == AiMode.WANDER) {
+            patrolAnchor = null
+            wanderGoal = null
             aiMode = AiMode.ALERT
             alertTimer = SpiderConfig.alertReactionTicks.get()
         }
@@ -356,14 +365,51 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
     }
 
-    private fun wander(@Suppress("UNUSED_PARAMETER") serverLevel: ServerLevel) {
-        if (!SpiderConfig.enableWandering.get()) return
-        if (random.nextDouble() < SpiderConfig.wanderPauseChance.get() / 20.0) return
-        if (random.nextInt(100) == 0) wanderAngle = random.nextDouble() * Math.PI * 2.0
-        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * SpiderConfig.wanderSpeedFactor.get()
-        setYRot(Math.toDegrees(wanderAngle).toFloat())
-        if (++wanderTicks % 120 == 0) wanderAngle += (random.nextDouble() - 0.5) * 1.5
-        move(MoverType.SELF, Vec3(-sin(wanderAngle) * speed, 0.0, cos(wanderAngle) * speed))
+    private fun wander(serverLevel: ServerLevel) {
+        if (!SpiderConfig.enableWandering.get()) {
+            navigation.stop()
+            wanderGoal = null
+            return
+        }
+
+        val anchor = patrolAnchor ?: Vec3(x, y, z).also { patrolAnchor = it }
+        val currentGoal = wanderGoal
+        if (currentGoal != null) {
+            val reached = distanceToSqr(
+                currentGoal.x + 0.5,
+                currentGoal.y.toDouble(),
+                currentGoal.z + 0.5
+            ) < 2.25
+            if (reached || tickCount >= wanderGoalExpiresAt || navigation.isDone) {
+                navigation.stop()
+                wanderGoal = null
+            } else {
+                return
+            }
+        }
+
+        if (tickCount < wanderGoalExpiresAt) return
+        val minInterval = (SpiderConfig.wanderMinIntervalSeconds.get() * 20.0).toInt()
+        val maxInterval = max(minInterval, (SpiderConfig.wanderMaxIntervalSeconds.get() * 20.0).toInt())
+        wanderGoalExpiresAt = tickCount + minInterval + random.nextInt((maxInterval - minInterval + 1).coerceAtLeast(1))
+        if (random.nextDouble() < SpiderConfig.wanderPauseChance.get()) return
+
+        val radius = SpiderConfig.wanderRadius.get()
+        repeat(12) {
+            val angle = random.nextDouble() * Math.PI * 2.0
+            val distance = radius * (0.25 + random.nextDouble() * 0.75)
+            val targetX = anchor.x + cos(angle) * distance
+            val targetZ = anchor.z + sin(angle) * distance
+            val targetY = SafeGroundFinder.findSafeY(serverLevel, targetX, targetZ) ?: return@repeat
+            if (kotlin.math.abs(targetY - anchor.y) > 8.0) return@repeat
+
+            val target = BlockPos.containing(targetX, targetY, targetZ)
+            wanderGoal = target
+            val speed = SpiderConfig.wanderSpeedFactor.get()
+            navigation.moveTo(targetX, targetY, targetZ, speed)
+            setYRot(Math.toDegrees(atan2(-(targetX - x), targetZ - z)).toFloat())
+            return
+        }
     }
 
     private fun grantEncounterAdvancements(level: ServerLevel) {
