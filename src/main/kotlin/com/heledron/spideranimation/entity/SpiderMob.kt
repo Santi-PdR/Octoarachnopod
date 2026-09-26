@@ -64,6 +64,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     var personalSize = 1.0
         private set
     private var attackTimer = 0
+    private var lungeTimer = 0
+    private var lungeDirection = Vec3.ZERO
     private var aiMode = AiMode.WANDER
     private var alertTimer = 0
     private var phase = 0.0
@@ -238,6 +240,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         ensureModel(serverLevel)
         if (tickCount % 20 == 0) grantEncounterAdvancements(serverLevel)
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
+        if (lungeTimer > 0) lungeTimer--
         val scaleBeforeUpdate = currentScale
 
         val rider = firstPassenger as? Player
@@ -382,7 +385,15 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
-        if (SpiderConfig.chasePathfinding.get()) {
+        if (variant == Variant.POISON && lungeTimer in 1..7) {
+            navigation.stop()
+            if (lungeTimer == 7) {
+                val impulse = 0.9 * currentScale.coerceIn(0.6, 2.5)
+                move(MoverType.SELF, lungeDirection.scale(impulse).add(0.0, 0.3 * impulse, 0.0))
+            } else {
+                move(MoverType.SELF, Vec3(0.0, -0.05 * currentScale, 0.0))
+            }
+        } else if (SpiderConfig.chasePathfinding.get()) {
             val passageWaypoint = findPassageWaypoint(serverLevel, target)
             if (navigation.isDone || tickCount % 10 == 0) {
                 val baseSpeed = getAttributeValue(Attributes.MOVEMENT_SPEED).coerceAtLeast(0.01)
@@ -395,15 +406,29 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             move(MoverType.SELF, direction.scale(speed))
         }
 
-        if (distance <= 3.5 && attackTimer == 0) {
+        val attackReach = 3.5 * min(currentScale, 2.0)
+        if (variant == Variant.POISON) {
+            if (lungeTimer == 0 && attackTimer == 0 && distance <= attackReach * 2.2) {
+                lungeDirection = Vec3(dx, 0.0, dz).normalize()
+                if (lungeDirection.lengthSqr() > 1.0e-8) {
+                    lungeTimer = 14
+                    attackTimer = SpiderConfig.attackCooldown.get()
+                }
+            } else if (lungeTimer in 1..6 && target.distanceToSqr(this) <= attackReach * attackReach) {
+                val damage = SpiderConfig.poisonAttackDamageHearts.get().toFloat() * 2f
+                if (target.hurt(damageSources().mobAttack(this), damage)) {
+                    target.addEffect(MobEffectInstance(MobEffects.POISON, (SpiderConfig.poisonEffectSeconds.get() * 20).toInt(), 1))
+                }
+                lungeTimer = 0
+            }
+        } else if (target.distanceToSqr(this) <= attackReach * attackReach && attackTimer == 0) {
             val damage = when (variant) {
                 Variant.NETHERITE -> (if (enraged) SpiderConfig.enragedAttackDamageHearts.get() else SpiderConfig.netheriteAttackDamageHearts.get()).toFloat() * 2f
-                Variant.POISON -> SpiderConfig.poisonAttackDamageHearts.get().toFloat() * 2f
                 Variant.HUNTER -> SpiderConfig.hunterAttackDamageHearts.get().toFloat() * 2f
                 Variant.CAMO -> SpiderConfig.camoAttackDamageHearts.get().toFloat() * 2f
+                Variant.POISON -> 0f
             }
             if (target.hurt(damageSources().mobAttack(this), damage)) {
-                if (variant == Variant.POISON) target.addEffect(MobEffectInstance(MobEffects.POISON, (SpiderConfig.poisonEffectSeconds.get() * 20).toInt(), 1))
                 if (variant == Variant.HUNTER) target.addEffect(MobEffectInstance(MobEffects.BLINDNESS, (SpiderConfig.hunterBlindnessSeconds.get() * 20).toInt(), 0))
                 attackTimer = SpiderConfig.attackCooldown.get()
             }
