@@ -429,7 +429,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             }
         }
 
-        val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * (SpiderConfig.speedGrowthFactor.get() - 1.0)
+        val scaleSpeed = scaleToSpeedFactor(currentScale)
         val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
@@ -632,6 +632,17 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         return null
     }
 
+    private fun scaleToSpeedFactor(scale: Double): Double {
+        val minSize = SpiderConfig.minSize.get()
+        val maxSize = SpiderConfig.maxSize.get()
+        val normalized = if (maxSize > minSize) {
+            ((scale - minSize) / (maxSize - minSize)).coerceIn(0.0, 1.0)
+        } else {
+            1.0
+        }
+        return 1.0 + normalized * (SpiderConfig.speedGrowthFactor.get() - 1.0)
+    }
+
     private fun approachScale(targetScale: Double) {
         val linearStep = currentScale + (targetScale - currentScale) * 0.3
         val minimum = currentScale / (1.0 + SpiderConfig.shrinkPercentPerTick.get() / 100.0)
@@ -696,7 +707,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
             val target = BlockPos.containing(targetX, targetY, targetZ)
             wanderGoal = target
-            val speed = SpiderConfig.wanderSpeedFactor.get()
+            val speed = SpiderConfig.wanderSpeedFactor.get() * scaleToSpeedFactor(currentScale)
             navigation.moveTo(targetX, targetY, targetZ, speed)
             setYRot(Math.toDegrees(atan2(-(targetX - x), targetZ - z)).toFloat())
             return
