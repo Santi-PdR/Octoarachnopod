@@ -1376,7 +1376,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     internal fun trackedDisplayIds(): List<java.util.UUID> =
-        parts.filter { it.isAlive }.map { it.uuid }
+        buildList {
+            parts.filter { it.isAlive }.mapTo(this) { it.uuid }
+            bodyDisplay?.takeIf { it.isAlive }?.let { add(it.uuid) }
+        }
 
     private fun cleanup() {
         parts.forEach { if (it.isAlive) it.discard() }
