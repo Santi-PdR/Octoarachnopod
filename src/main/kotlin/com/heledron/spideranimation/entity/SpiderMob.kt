@@ -78,6 +78,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var alertTimer = 0
     private var phase = 0.0
     private var currentScale = 1.0
+    private var supportNormal = Vec3(0.0, 1.0, 0.0)
     private var wanderTicks = 0
     private var wanderAngle = 0.0
     private var chaseSteerSign = 1
@@ -860,15 +861,43 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val yaw = Math.toRadians(yRot.toDouble())
         val forward = Vec3(-sin(yaw), 0.0, cos(yaw))
         val right = Vec3(forward.z, 0.0, -forward.x)
+
+        // Match the original body's support-plane response: planted feet determine
+        // a smoothed up axis, so the leg roots lean with uneven terrain.
+        fun average(points: List<Vec3>): Vec3? =
+            if (points.isEmpty()) null else points.reduce(Vec3::add).scale(1.0 / points.size)
+        val leftFeet = layouts.indices.filter { layouts[it].side < 0.0 }.mapNotNull { footPositions[it] }
+        val rightFeet = layouts.indices.filter { layouts[it].side > 0.0 }.mapNotNull { footPositions[it] }
+        val frontFeet = layouts.indices.filter { layouts[it].rootZ >= 0.0 }.mapNotNull { footPositions[it] }
+        val backFeet = layouts.indices.filter { layouts[it].rootZ < 0.0 }.mapNotNull { footPositions[it] }
+        val lateral = average(rightFeet)?.subtract(average(leftFeet) ?: Vec3.ZERO)
+        val longitudinal = average(frontFeet)?.subtract(average(backFeet) ?: Vec3.ZERO)
+        if (leftFeet.isNotEmpty() && rightFeet.isNotEmpty() &&
+            frontFeet.isNotEmpty() && backFeet.isNotEmpty() &&
+            lateral != null && longitudinal != null &&
+            lateral.lengthSqr() > 1.0e-6 && longitudinal.lengthSqr() > 1.0e-6
+        ) {
+            var estimatedUp = longitudinal.cross(lateral).normalize()
+            if (estimatedUp.y < 0.0) estimatedUp = estimatedUp.scale(-1.0)
+            if (estimatedUp.y > 0.15) {
+                supportNormal = supportNormal.scale(0.82).add(estimatedUp.scale(0.18)).normalize()
+            }
+        }
+        var bodyRight = right.subtract(supportNormal.scale(right.dot(supportNormal)))
+        if (bodyRight.lengthSqr() < 1.0e-6) bodyRight = right
+        bodyRight = bodyRight.normalize()
+        var bodyForward = bodyRight.cross(supportNormal).normalize()
+        if (bodyForward.dot(forward) < 0.0) bodyForward = bodyForward.scale(-1.0)
+
         val idleBreathing = !tamed && !SpiderConfig.enableWandering.get() && stationaryTicks > 0
         val breath = if (idleBreathing) sin(tickCount * 0.08) * 0.035 * scale else 0.0
-        val anchor = Vec3(x, y + 1.1 * scale + breath, z)
+        val anchor = Vec3(x, y, z).add(supportNormal.scale(1.1 * scale)).add(0.0, breath, 0.0)
         layouts.forEachIndexed { index, leg ->
             val pairPhase = phase + (index / 2) * Math.PI
             val stride = sin(pairPhase) * 0.25 * scale
             val lift = max(0.0, sin(pairPhase)) * 0.2 * scale
-            val root = anchor.add(forward.scale(leg.rootZ * scale))
-                .add(right.scale(leg.side * 0.18 * scale))
+            val root = anchor.add(bodyForward.scale(leg.rootZ * scale))
+                .add(bodyRight.scale(leg.side * 0.18 * scale))
             val plannedFoot = Vec3(x, y + 0.04 * scale + lift, z)
                 .add(right.scale(leg.side * leg.restX * scale))
                 .add(forward.scale((leg.restZ + stride) * scale))
