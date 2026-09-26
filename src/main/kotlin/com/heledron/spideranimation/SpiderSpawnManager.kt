@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
+import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.Difficulty
 import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.level.Level
@@ -50,6 +51,13 @@ object SpiderSpawnManager {
         }
         if (data.wasPeaceful) {
             data.wasPeaceful = false
+            val survivingSpider = data.spiderId?.let { uuid ->
+                server.allLevels.asSequence().mapNotNull { it.getEntity(uuid) as? SpiderMob }.firstOrNull { it.isAlive }
+            }
+            if (survivingSpider != null) {
+                data.setDirty()
+                return
+            }
             data.spiderId = null
             data.remainingTicks = (SpiderConfig.peacefulExitSpawnMinutes.get() * 1200.0).toInt().coerceAtLeast(1)
             data.scheduleKind = "PEACEFUL_EXIT"
@@ -60,13 +68,40 @@ object SpiderSpawnManager {
         val active = data.spiderId?.let { uuid ->
             server.allLevels.asSequence().mapNotNull { it.getEntity(uuid) as? SpiderMob }.firstOrNull { it.isAlive }
         }
-        if (active != null) return
+        if (active != null) {
+            val players = server.playerList.players.filter { it.isAlive }
+            val activeLevel = active.level() as? ServerLevel
+            if (activeLevel != null && players.isNotEmpty()) {
+                val localPlayers = activeLevel.players().filter { it.isAlive }
+                if (localPlayers.isEmpty()) {
+                    data.abandonedTicks++
+                    if (data.abandonedTicks >= 100) {
+                        data.abandonedTicks = 0
+                        if (relocate(active, data, players.randomOrNull()!!)) return
+                    }
+                } else {
+                    data.abandonedTicks = 0
+                    val limit = SpiderConfig.relocateDistance.get()
+                    if (limit > 0.0 && localPlayers.minOf { it.distanceToSqr(active) } > limit * limit) {
+                        data.strandedTicks++
+                        if (data.strandedTicks >= 200) {
+                            data.strandedTicks = 0
+                            if (relocate(active, data, players.randomOrNull()!!)) return
+                        }
+                    } else {
+                        data.strandedTicks = 0
+                    }
+                }
+            } else {
+                data.abandonedTicks = 0
+                data.strandedTicks = 0
+            }
+            return
+        }
         // The stored entity can be temporarily absent because its chunk is unloaded.
         // Only SpiderMob.die clears this ID, so never spawn a duplicate from a missing lookup.
         if (data.spiderId != null) return
-         if (!data.initialized) {
-            val min = SpiderConfig.firstSpawnMin.get()
-            val max = maxOf(min, SpiderConfig.firstSpawnMax.get())
+        if (!data.initialized) {
             data.remainingTicks = rollFirstSpawnTicks()
             data.scheduleKind = "FIRST_SPAWN"
             data.scheduleElapsed = 0
@@ -81,6 +116,33 @@ object SpiderSpawnManager {
         }
         if (data.everSpawned && SpiderConfig.permadeath.get()) return
         val player = overworld.players().filter { it.isAlive }.randomOrNull() ?: return
+        val spider = spawnNear(player)
+        if (spider != null) {
+            data.spiderId = spider.uuid
+            data.everSpawned = true
+            data.remainingTicks = 0
+            data.scheduleKind = "NONE"
+            data.scheduleElapsed = 0
+        } else {
+            data.remainingTicks = 200
+            data.scheduleKind = "RETRY"
+            data.scheduleElapsed = 0
+        }
+        data.setDirty()
+    }
+
+    private fun relocate(oldSpider: SpiderMob, data: HuntData, player: ServerPlayer): Boolean {
+        val replacement = spawnNear(player) ?: return false
+        oldSpider.discard()
+        data.spiderId = replacement.uuid
+        data.abandonedTicks = 0
+        data.strandedTicks = 0
+        data.setDirty()
+        return true
+    }
+
+    private fun spawnNear(player: ServerPlayer): SpiderMob? {
+        val level = player.serverLevel()
         val minDistance = SpiderConfig.spawnDistanceMin.get()
         val maxDistance = maxOf(minDistance, SpiderConfig.spawnDistanceMax.get())
         repeat(SpiderConfig.spawnAngleAttempts.get()) {
@@ -88,32 +150,19 @@ object SpiderSpawnManager {
             val distance = Random.nextDouble(minDistance, maxDistance)
             val x = player.x + cos(angle) * distance
             val z = player.z + sin(angle) * distance
-            val y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt())
+            val y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt())
             val pos = BlockPos(x.toInt(), y, z.toInt())
-            if (!overworld.getBlockState(pos).isAir || !overworld.getFluidState(pos).isEmpty ||
-                !overworld.getBlockState(pos.below()).blocksMotion()
+            if (!level.getBlockState(pos).isAir || !level.getFluidState(pos).isEmpty ||
+                !level.getBlockState(pos.below()).blocksMotion()
             ) return@repeat
-            val spider = ModEntities.SPIDER.get().create(overworld) ?: return@repeat
-            spider.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
+            val spider = ModEntities.SPIDER.get().create(level) ?: return@repeat
+            spider.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
             spider.moveTo(x, y.toDouble(), z, Random.nextFloat() * 360f, 0f)
             spider.naturalEncounter = true
             spider.chooseVariant()
-            if (overworld.addFreshEntity(spider)) {
-                data.spiderId = spider.uuid
-                data.everSpawned = true
-                data.remainingTicks = 0
-                data.scheduleKind = "NONE"
-                data.scheduleElapsed = 0
-                data.setDirty()
-                return
-            }
+            if (level.addFreshEntity(spider)) return spider
         }
-        if (!data.everSpawned) {
-            data.remainingTicks = 20
-            data.scheduleKind = "RETRY"
-            data.scheduleElapsed = 0
-        }
-        data.setDirty()
+        return null
     }
 
     fun killed(server: MinecraftServer) {
@@ -132,6 +181,8 @@ object SpiderSpawnManager {
         var remainingTicks = 0
         var scheduleKind = "NONE"
         var scheduleElapsed = 0
+        var abandonedTicks = 0
+        var strandedTicks = 0
         var wasPeaceful = false
         var initialized = false
 
@@ -140,6 +191,8 @@ object SpiderSpawnManager {
             tag.putInt("remainingTicks", remainingTicks)
             tag.putString("scheduleKind", scheduleKind)
             tag.putInt("scheduleElapsed", scheduleElapsed)
+            tag.putInt("abandonedTicks", abandonedTicks)
+            tag.putInt("strandedTicks", strandedTicks)
             tag.putBoolean("wasPeaceful", wasPeaceful)
             tag.putBoolean("initialized", initialized)
             spiderId?.let { tag.putUUID("spiderId", it) }
@@ -152,6 +205,8 @@ object SpiderSpawnManager {
                 it.remainingTicks = tag.getInt("remainingTicks")
                 it.scheduleKind = tag.getString("scheduleKind").ifEmpty { "NONE" }
                 it.scheduleElapsed = tag.getInt("scheduleElapsed").coerceAtLeast(0)
+                it.abandonedTicks = tag.getInt("abandonedTicks").coerceAtLeast(0)
+                it.strandedTicks = tag.getInt("strandedTicks").coerceAtLeast(0)
                 it.wasPeaceful = tag.getBoolean("wasPeaceful")
                 it.initialized = tag.getBoolean("initialized")
                 if (tag.hasUUID("spiderId")) it.spiderId = tag.getUUID("spiderId")
