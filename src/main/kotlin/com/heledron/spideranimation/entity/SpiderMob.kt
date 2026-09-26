@@ -1137,20 +1137,27 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             root.lerp(foot, 2.0 / 3.0).add(fallback.scale(segmentLength * 0.65)),
             foot
         )
+
+        // Match the original KinematicChain FABRIK pass: pin the foot first,
+        // pull the joints toward it, then pin the root and extend back outward.
         repeat(20) {
             points[3] = foot
-            for (index in 2 downTo 0) {
+            for (index in 2 downTo 1) {
                 val offset = points[index].subtract(points[index + 1])
                 val direction = if (offset.lengthSqr() > 1.0e-8) offset.normalize() else fallback
                 points[index] = points[index + 1].add(direction.scale(segmentLength))
             }
-            points[0] = root
-            for (index in 0..2) {
-                val offset = points[index + 1].subtract(points[index])
+
+            val firstOffset = root.subtract(points[1])
+            val firstDirection = if (firstOffset.lengthSqr() > 1.0e-8) firstOffset.normalize() else fallback
+            points[1] = root.subtract(firstDirection.scale(segmentLength))
+            for (index in 2..3) {
+                val offset = points[index].subtract(points[index - 1])
                 val direction = if (offset.lengthSqr() > 1.0e-8) offset.normalize() else fallback
-                points[index + 1] = points[index].add(direction.scale(segmentLength))
+                points[index] = points[index - 1].add(direction.scale(segmentLength))
             }
-            if (points[3].distanceToSqr(foot) < 1.0e-4) return points.toList()
+
+            if (points[3].distanceToSqr(foot) < 0.01) return points.toList()
         }
         return points.toList()
     }
