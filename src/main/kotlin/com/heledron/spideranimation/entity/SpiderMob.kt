@@ -321,10 +321,17 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val distanceScale = SpiderConfig.minSize.get() +
             (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
             ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
-        val desiredScale = when (variant) {
+        var desiredScale = when (variant) {
             Variant.POISON -> SpiderConfig.poisonSize.get()
             Variant.HUNTER -> SpiderConfig.hunterSize.get()
             Variant.NETHERITE, Variant.CAMO -> max(distanceScale, waterScale ?: 0.0)
+        }
+        if (variant != Variant.HUNTER && distance <= 14.0 + 6.0 * currentScale) {
+            val room = SafeGroundFinder.roomAt(serverLevel, target.x, target.y, target.z)
+            if (room != null) {
+                val fitScale = max(0.12, (room - 0.2) / (1.1 + 0.3))
+                desiredScale = min(desiredScale, fitScale)
+            }
         }
         val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
         currentScale += (desiredScale - currentScale) * adjustment
