@@ -1408,7 +1408,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             .add(Attributes.ARMOR_TOUGHNESS, 0.0)
             .add(Attributes.MOVEMENT_SPEED, 0.3)
             .add(Attributes.ATTACK_DAMAGE, 12.0)
-            .add(Attributes.FOLLOW_RANGE, 64.0)
+            .add(Attributes.FOLLOW_RANGE, 400.0)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.0)
     }
 }
