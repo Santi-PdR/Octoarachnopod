@@ -3,6 +3,7 @@ package com.heledron.spideranimation.entity
 import com.heledron.spideranimation.ModItems
 import com.heledron.spideranimation.SpiderConfig
 import com.heledron.spideranimation.SpiderSpawnManager
+import com.heledron.spideranimation.SpiderAdvancements
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
@@ -114,6 +115,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 bossEvent.name = Component.literal("Enraged Netherite Octoarachnopod")
                 bossEvent.color = BossEvent.BossBarColor.RED
                 bossEvent.isVisible = true
+                if (player is ServerPlayer) SpiderAdvancements.grant(player, "enrage")
                 if (!player.abilities.instabuild) stack.shrink(1)
             }
             return InteractionResult.sidedSuccess(level().isClientSide)
@@ -143,6 +145,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (level().isClientSide) return
         val serverLevel = level() as? ServerLevel ?: return
         ensureModel(serverLevel)
+        if (tickCount % 20 == 0) grantEncounterAdvancements(serverLevel)
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
 
         val rider = firstPassenger as? Player
@@ -224,6 +227,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         setPos(x - sin(wanderAngle) * speed, y, z + cos(wanderAngle) * speed)
     }
 
+    private fun grantEncounterAdvancements(level: ServerLevel) {
+        level.players().filter { it.distanceToSqr(x, y, z) <= 576.0 }.forEach { player ->
+            SpiderAdvancements.grant(player, "encounter")
+            when (variant) {
+                Variant.CAMO -> SpiderAdvancements.grant(player, "encounter_camo")
+                Variant.POISON -> SpiderAdvancements.grant(player, "encounter_poison")
+                Variant.HUNTER -> SpiderAdvancements.grant(player, "encounter_hunter")
+                Variant.NETHERITE -> Unit
+            }
+        }
+    }
+
     private fun ensureModel(level: ServerLevel) {
         if (parts.isNotEmpty()) return
         repeat(19) { index ->
@@ -291,6 +306,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val drop = if (enraged) net.minecraft.world.item.Items.NETHERITE_BLOCK else net.minecraft.world.item.Items.NETHERITE_INGOT
             if (enraged || random.nextDouble() < 0.6) {
                 serverLevel.addFreshEntity(net.minecraft.world.entity.item.ItemEntity(serverLevel, x, y + 0.25, z, net.minecraft.world.item.ItemStack(drop)))
+            }
+            (lastHurtByPlayer as? ServerPlayer)?.let { killer ->
+                SpiderAdvancements.grant(killer, "slay")
+                if (enraged) SpiderAdvancements.grant(killer, "slay_boss")
             }
             if (naturalEncounter) SpiderSpawnManager.killed(serverLevel.server)
         }
