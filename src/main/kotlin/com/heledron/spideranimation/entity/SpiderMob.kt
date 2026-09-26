@@ -5,6 +5,11 @@ import com.heledron.spideranimation.SpiderConfig
 import com.heledron.spideranimation.SpiderSpawnManager
 import com.heledron.spideranimation.SpiderAdvancements
 import net.minecraft.core.BlockPos
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.ResourceLocation
+import net.minecraft.sounds.SoundEvent
+import net.minecraft.sounds.SoundEvents
+import net.minecraft.sounds.SoundSource
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
@@ -88,6 +93,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var riderInputForward = 0.0
     private var riderInputStrafe = 0.0
     private var riderInputReceivedAt = Long.MIN_VALUE
+    private var wasOnGround = true
     private val footPositions = mutableListOf<Vec3?>()
     private val footStepStarts = mutableListOf<Vec3?>()
     private val footStepTargets = mutableListOf<Vec3?>()
@@ -276,6 +282,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         super.tick()
         if (level().isClientSide) return
         val serverLevel = level() as? ServerLevel ?: return
+        if (onGround && !wasOnGround) playLandingSound(serverLevel)
+        wasOnGround = onGround
         ensureModel(serverLevel)
         if (tickCount % 20 == 0) grantEncounterAdvancements(serverLevel)
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
@@ -894,6 +902,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 val stepping = start.lerp(destination, progress)
                     .add(0.0, sin(progress * Math.PI) * 0.25 * scale, 0.0)
                 if (progress >= 1.0) {
+                    playFootstepSound(level, destination)
                     footPositions[index] = destination
                     footStepStarts[index] = null
                     footStepTargets[index] = null
@@ -953,16 +962,79 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         return points.toList()
     }
 
-    private fun camoBlockUnder(level: ServerLevel, position: Vec3): BlockState? {
+    private fun camoBlockUnder(level: ServerLevel, position: Vec3, maxDepth: Int = 3): BlockState? {
         val x = kotlin.math.floor(position.x).toInt()
         val z = kotlin.math.floor(position.z).toInt()
         val startY = kotlin.math.floor(position.y + 0.01).toInt()
-        for (depth in 0..3) {
+        for (depth in 0..maxDepth) {
             val blockPos = BlockPos(x, startY - depth, z)
             val state = level.getBlockState(blockPos)
             if (!state.isAir && !state.getCollisionShape(level, blockPos).isEmpty) return state
         }
         return null
+    }
+
+    private fun playFootstepSound(level: ServerLevel, position: Vec3) {
+        val configuredVolume = SpiderConfig.variantStepVolume.get().toFloat()
+        val (sound, volume, pitch) = when (variant) {
+            Variant.NETHERITE -> Triple(SoundEvents.NETHERITE_BLOCK_STEP, 0.3f, 1.0f)
+            Variant.POISON -> Triple(SoundEvents.WART_BLOCK_STEP, configuredVolume, 0.9f)
+            Variant.CAMO -> {
+                val surface = camoBlockUnder(level, position)
+                if (surface != null) {
+                    val soundType = surface.soundType
+                    Triple(soundType.stepSound, soundType.volume * configuredVolume, soundType.pitch)
+                } else {
+                    Triple(resolveSound(SpiderConfig.variantStepSound.get(), SoundEvents.NETHERITE_BLOCK_STEP), configuredVolume, 1.0f)
+                }
+            }
+            Variant.HUNTER -> Triple(
+                resolveSound(SpiderConfig.variantStepSound.get(), SoundEvents.NETHERITE_BLOCK_STEP),
+                configuredVolume,
+                1.0f
+            )
+        }
+        playSoundAt(level, position, sound, volume, pitch)
+    }
+
+    private fun playLandingSound(level: ServerLevel) {
+        val configuredVolume = SpiderConfig.variantLandVolume.get().toFloat()
+        val position = Vec3(x, y, z)
+        val (sound, volume, pitch) = when (variant) {
+            Variant.NETHERITE -> Triple(SoundEvents.NETHERITE_BLOCK_FALL, 1.0f, 0.8f)
+            Variant.POISON -> Triple(SoundEvents.WART_BLOCK_FALL, configuredVolume, 0.8f)
+            Variant.CAMO -> {
+                val surface = camoBlockUnder(level, position, 6)
+                if (surface != null) {
+                    val soundType = surface.soundType
+                    Triple(soundType.fallSound, soundType.volume * configuredVolume, soundType.pitch)
+                } else {
+                    Triple(resolveSound(SpiderConfig.variantLandSound.get(), SoundEvents.NETHERITE_BLOCK_FALL), configuredVolume, 0.8f)
+                }
+            }
+            Variant.HUNTER -> Triple(
+                resolveSound(SpiderConfig.variantLandSound.get(), SoundEvents.NETHERITE_BLOCK_FALL),
+                configuredVolume,
+                0.8f
+            )
+        }
+        playSoundAt(level, position, sound, volume, pitch)
+    }
+
+    private fun resolveSound(id: String, fallback: SoundEvent): SoundEvent {
+        val location = ResourceLocation.tryParse(id) ?: return fallback
+        return BuiltInRegistries.SOUND_EVENT.getOptional(location).orElse(fallback)
+    }
+
+    private fun playSoundAt(level: ServerLevel, position: Vec3, sound: SoundEvent, volume: Float, pitch: Float) {
+        level.playSound(
+            null,
+            BlockPos.containing(position.x, position.y, position.z),
+            sound,
+            SoundSource.HOSTILE,
+            volume,
+            pitch
+        )
     }
 
     private fun probeGround(level: ServerLevel, planned: Vec3, scale: Double): Vec3 {
