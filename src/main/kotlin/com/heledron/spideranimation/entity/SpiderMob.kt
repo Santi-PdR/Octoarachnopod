@@ -505,6 +505,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val secondJoint = root.lerp(foot, 0.64)
                 .add(right.scale(leg.side * leg.reach * 0.55 * scale))
                 .add(0.0, -0.28 * scale, 0.0)
+            if (variant == Variant.CAMO) {
+                camoBlockUnder(level, foot)?.let { groundBlock ->
+                    for (segmentIndex in 0 until 3) {
+                        val display = parts[index * 3 + segmentIndex]
+                        if (display.getBlockState() != groundBlock) display.setBlockState(groundBlock)
+                    }
+                }
+            }
             val points = listOf(root, firstJoint, secondJoint, foot)
             for (segmentIndex in 0 until 3) {
                 val taper = 0.28125 + (0.09375 - 0.28125) * segmentIndex / 2.0
@@ -516,6 +524,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 )
             }
         }
+    }
+
+    private fun camoBlockUnder(level: ServerLevel, position: Vec3): BlockState? {
+        val x = kotlin.math.floor(position.x).toInt()
+        val z = kotlin.math.floor(position.z).toInt()
+        val startY = kotlin.math.floor(position.y + 0.01).toInt()
+        for (depth in 0..3) {
+            val blockPos = BlockPos(x, startY - depth, z)
+            val state = level.getBlockState(blockPos)
+            if (!state.isAir && !state.getCollisionShape(level, blockPos).isEmpty) return state
+        }
+        return null
     }
 
     private fun probeGround(level: ServerLevel, planned: Vec3, scale: Double): Vec3 {
