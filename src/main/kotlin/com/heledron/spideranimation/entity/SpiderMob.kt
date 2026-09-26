@@ -214,6 +214,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
         val rider = firstPassenger as? Player
         if (tamed && rider != null) {
+            navigation.stop()
             setYRot(rider.yRot)
             val forward = rider.zza
             val strafe = rider.xxa
@@ -223,6 +224,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             currentScale += (SpiderConfig.riddenSize.get() - currentScale) * 0.2
             setTarget(null)
         } else if (tamed && personalOwner != null) {
+            navigation.stop()
             val owner = serverLevel.getPlayerByUUID(personalOwner!!)
             if (owner != null && distanceTo(owner) > 2.0) {
                 val dx = owner.x - x
@@ -254,6 +256,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || night) }
             .minByOrNull { it.distanceToSqr(this) }
         if (target == null || distanceTo(target) > SpiderConfig.chaseDistance.get() * SpiderConfig.chaseExitMultiplier.get()) {
+            navigation.stop()
             setTarget(null)
             alertTimer = 0
             val idleScale = when (variant) {
@@ -287,20 +290,32 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         yRotO = yaw
         if (alertTimer == 0) alertTimer = SpiderConfig.alertReactionTicks.get()
         if (alertTimer > 0) {
+            navigation.stop()
             alertTimer--
             return
         }
         if (variant == Variant.HUNTER && target.hasLineOfSight(this)) {
             val toSpider = Vec3(x - target.x, y + 1.0 - target.eyeY, z - target.z).normalize()
-            if (target.lookAngle.dot(toSpider) > 0.82) return
+            if (target.lookAngle.dot(toSpider) > 0.82) {
+                navigation.stop()
+                return
+            }
         }
 
         val scaleSpeed = 1.0 + ((currentScale - 1.0) / max(1.0, SpiderConfig.maxSize.get() - 1.0)) * (SpiderConfig.speedGrowthFactor.get() - 1.0)
         val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
-        val direction = Vec3(dx, 0.0, dz).normalize()
-        move(MoverType.SELF, direction.scale(speed))
+        if (SpiderConfig.chasePathfinding.get()) {
+            if (navigation.isDone || tickCount % 10 == 0) {
+                val baseSpeed = getAttributeValue(Attributes.MOVEMENT_SPEED).coerceAtLeast(0.01)
+                navigation.moveTo(target, speed / baseSpeed)
+            }
+        } else {
+            navigation.stop()
+            val direction = Vec3(dx, 0.0, dz).normalize()
+            move(MoverType.SELF, direction.scale(speed))
+        }
 
         if (distance <= 3.5 && attackTimer == 0) {
             val damage = when (variant) {
