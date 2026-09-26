@@ -1148,16 +1148,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             0f
         )
         val initialDirection = Vector3f(forward).rotate(straightening)
-        val points = arrayOf(root, root, root, root)
+        val segmentOffset = Vec3(
+            initialDirection.x.toDouble(),
+            initialDirection.y.toDouble(),
+            initialDirection.z.toDouble()
+        ).scale(segmentLength)
+        val points = Array(4) { root }
         for (index in 1..3) {
-            points[index] = points[index - 1].add(
-                initialDirection.x.toDouble(),
-                initialDirection.y.toDouble(),
-                initialDirection.z.toDouble()
-            ).also {
-                // Each default spider segment starts in its configured forward direction.
-                points[index] = it
-            }
+            points[index] = points[index - 1].add(segmentOffset)
         }
 
         // Match the original KinematicChain FABRIK pass: pin the foot first,
