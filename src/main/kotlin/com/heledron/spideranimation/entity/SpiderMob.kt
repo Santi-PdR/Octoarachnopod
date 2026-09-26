@@ -96,6 +96,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var groomingOriginalLeftGrounded = false
     private var groomingOriginalRightGrounded = false
     private val parts = mutableListOf<BlockDisplay>()
+    private var bodyDisplay: BlockDisplay? = null
     private var riderInputForward = 0.0
     private var riderInputStrafe = 0.0
     private var riderInputReceivedAt = Long.MIN_VALUE
@@ -866,9 +867,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
     private fun ensureModel(level: ServerLevel) {
         val requiredParts = legLayouts().size * 3
-        if (parts.size == requiredParts) return
+        if (parts.size == requiredParts && bodyDisplay?.isAlive == true) return
         parts.toList().forEach { if (it.isAlive) it.discard() }
         parts.clear()
+        bodyDisplay?.let { if (it.isAlive) it.discard() }
+        bodyDisplay = null
         repeat(requiredParts) { index ->
             val display = BLOCK_DISPLAY.create(level) ?: return@repeat
             display.setBlockState(stateFor(index))
@@ -879,6 +882,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             display.persistentData.putUUID("arachnomod_owner", uuid)
             if (level.addFreshEntity(display)) parts += display
         }
+        val torso = BLOCK_DISPLAY.create(level) ?: return
+        torso.setBlockState(Blocks.NETHERITE_BLOCK.defaultBlockState())
+        torso.setNoGravity(true)
+        torso.noPhysics = true
+        torso.setInvulnerable(true)
+        torso.addTag("arachnomod_part")
+        torso.persistentData.putUUID("arachnomod_owner", uuid)
+        if (level.addFreshEntity(torso)) bodyDisplay = torso
     }
 
     private fun stateFor(@Suppress("UNUSED_PARAMETER") index: Int): BlockState = when (variant) {
@@ -962,6 +973,21 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val anchor = Vec3(x, y + supportHeightOffset, z)
             .add(supportNormal.scale(1.1 * scale))
             .add(0.0, breath, 0.0)
+        bodyDisplay?.takeIf { it.isAlive }?.let { torso ->
+            val bodyRotation = Quaternionf().rotationTo(
+                Vector3f(0f, 0f, 1f),
+                Vector3f(bodyForward.x.toFloat(), bodyForward.y.toFloat(), bodyForward.z.toFloat())
+            )
+            torso.setPos(anchor.x, anchor.y, anchor.z)
+            torso.setTransformation(
+                Transformation(
+                    Vector3f(-0.5f, -0.5f, -0.5f),
+                    bodyRotation,
+                    Vector3f((0.7 * scale).toFloat(), (0.45 * scale).toFloat(), scale.toFloat()),
+                    Quaternionf()
+                )
+            )
+        }
         layouts.forEachIndexed { index, leg ->
             val root = anchor.add(bodyForward.scale(leg.rootZ * scale))
                 .add(bodyRight.scale(leg.side * 0.18 * scale))
@@ -1355,6 +1381,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private fun cleanup() {
         parts.forEach { if (it.isAlive) it.discard() }
         parts.clear()
+        bodyDisplay?.let { if (it.isAlive) it.discard() }
+        bodyDisplay = null
         bossEvent.removeAllPlayers()
     }
 
