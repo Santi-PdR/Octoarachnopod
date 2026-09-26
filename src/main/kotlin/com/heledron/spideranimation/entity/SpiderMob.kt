@@ -517,8 +517,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     val minimumOpeningHeight = if (variant == Variant.HUNTER) 2 else 1
                     opening = SafeGroundFinder.collectOpenings(
                         level, hit.location.x, hit.location.z, groundY, target.x, target.z,
-                        minHeight = minimumOpeningHeight
-                    ).firstOrNull()
+                        minHeight = minimumOpeningHeight, limit = 256
+                    ).firstOrNull { canReachOpening(level, it, minimumOpeningHeight) }
                     if (opening != null) {
                         committedOpening = opening
                         committedOpeningUntil = tickCount + 80
@@ -549,6 +549,25 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
         return if (opening.alongX) Vec3(waypointAlong, opening.y, opening.z)
         else Vec3(opening.x, opening.y, waypointAlong)
+    }
+
+    private fun canReachOpening(level: ServerLevel, opening: SafeGroundFinder.Opening, minimumHeight: Int): Boolean {
+        if (opening.height < minimumHeight) return false
+        val offset = currentScale * 0.5
+        val hit = level.clip(
+            ClipContext(
+                Vec3(x, y + offset, z),
+                Vec3(opening.x, opening.y + offset, opening.z),
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                this
+            )
+        )
+        if (hit.type != HitResult.Type.BLOCK) return true
+        val dx = hit.location.x - opening.x
+        val dz = hit.location.z - opening.z
+        if (dx * dx + dz * dz > 2.25) return false
+        return SafeGroundFinder.openingHeight(level, hit.location.x, opening.y, hit.location.z) >= minimumHeight
     }
 
     private fun findSteerWaypoint(level: ServerLevel, target: Player): Vec3? {
