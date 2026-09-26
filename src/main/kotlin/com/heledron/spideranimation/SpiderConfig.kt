@@ -64,6 +64,10 @@ object SpiderConfig {
     val enragedHealth = builder.defineInRange("enragedMaxHealth", 700.0, 1.0, 1000000.0)
     val enragedSpeedMultiplier = builder.defineInRange("enragedSpeedMultiplier", 1.5, 1.0, 8.0)
     val enragedAttackDamageHearts = builder.defineInRange("enragedAttackDamageHearts", 10.0, 0.0, 100.0)
+    val variantStepSound = builder.define("variantStepSound", "minecraft:block.moss.step")
+    val variantStepVolume = builder.defineInRange("variantStepVolume", 0.3, 0.0, 10.0)
+    val variantLandSound = builder.define("variantLandSound", "minecraft:block.moss.fall")
+    val variantLandVolume = builder.defineInRange("variantLandVolume", 1.0, 0.0, 10.0)
     val hunterLightBlindnessOnlyAtNight = builder.define("hostileOnlyAtNight", false)
     val onlyAtNight = hunterLightBlindnessOnlyAtNight
     val commandEntries: Map<String, ForgeConfigSpec.ConfigValue<*>> = linkedMapOf(
@@ -127,6 +131,10 @@ object SpiderConfig {
         "enragedMaxHealth" to enragedHealth,
         "enragedSpeedMultiplier" to enragedSpeedMultiplier,
         "enragedAttackDamageHearts" to enragedAttackDamageHearts,
+        "variantStepSound" to variantStepSound,
+        "variantStepVolume" to variantStepVolume,
+        "variantLandSound" to variantLandSound,
+        "variantLandVolume" to variantLandVolume,
         "hostileOnlyAtNight" to hunterLightBlindnessOnlyAtNight
     )
     val SPEC: ForgeConfigSpec = builder.build()
