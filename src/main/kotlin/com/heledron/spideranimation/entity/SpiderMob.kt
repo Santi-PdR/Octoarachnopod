@@ -75,6 +75,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var wanderGoalExpiresAt = 0
     private var committedOpening: SafeGroundFinder.Opening? = null
     private var committedOpeningUntil = 0
+    private var openingRescanAt = 0
     private val parts = mutableListOf<BlockDisplay>()
     private val footPositions = mutableListOf<Vec3?>()
     private val footStepStarts = mutableListOf<Vec3?>()
@@ -295,6 +296,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 patrolAnchor = Vec3(x, y, z)
                 wanderGoal = null
                 committedOpening = null
+                openingRescanAt = 0
                 navigation.stop()
             }
             setTarget(null)
@@ -318,6 +320,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             patrolAnchor = null
             wanderGoal = null
             committedOpening = null
+            openingRescanAt = 0
             aiMode = AiMode.ALERT
             alertTimer = SpiderConfig.alertReactionTicks.get()
         }
@@ -379,7 +382,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
         if (SpiderConfig.chasePathfinding.get()) {
             val passageWaypoint = findPassageWaypoint(serverLevel, target)
-            if (navigation.isDone || tickCount % 10 == 0 || passageWaypoint != null) {
+            if (navigation.isDone || tickCount % 10 == 0) {
                 val baseSpeed = getAttributeValue(Attributes.MOVEMENT_SPEED).coerceAtLeast(0.01)
                 val destination = passageWaypoint ?: target.position()
                 navigation.moveTo(destination.x, destination.y, destination.z, speed / baseSpeed)
@@ -429,6 +432,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             opening = null
         }
         if (opening == null) {
+            if (tickCount < openingRescanAt) return null
+            openingRescanAt = tickCount + 20
             val start = Vec3(x, y + currentScale, z)
             val end = Vec3(target.x, target.y + currentScale, target.z)
             val hit = level.clip(ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this))
@@ -458,6 +463,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val insideSpan = along > opening.lo - 1.5 && along < opening.hi + 1.5
         if (if (enterAtLo) along > opening.hi + 2.0 else along < opening.lo - 2.0) {
             committedOpening = null
+            openingRescanAt = tickCount + 20
             return null
         }
         val waypointAlong = if (laneOffset >= 0.75 && !insideSpan) {
