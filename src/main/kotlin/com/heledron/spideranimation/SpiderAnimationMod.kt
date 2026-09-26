@@ -88,6 +88,24 @@ class SpiderAnimationMod {
                         1
                     }
                 }))
+                .then(Commands.literal("chasedistance").requires { it.hasPermission(2) }
+                    .then(Commands.argument("blocks", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(8.0, 256.0)).executes { context ->
+                        val blocks = com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "blocks")
+                        SpiderConfig.chaseDistance.set(blocks)
+                        SpiderConfig.SPEC.save()
+                        context.source.sendSuccess({ Component.literal("Spider chase distance set to $blocks blocks (saved to config).") }, true)
+                        1
+                    }))
+                .then(Commands.literal("config").requires { it.hasPermission(2) }
+                    .then(Commands.literal("chaseDistance")
+                        .then(Commands.literal("set")
+                            .then(Commands.argument("blocks", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(8.0, 256.0)).executes { context ->
+                                val blocks = com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "blocks")
+                                SpiderConfig.chaseDistance.set(blocks)
+                                SpiderConfig.SPEC.save()
+                                context.source.sendSuccess({ Component.literal("chaseDistance set to $blocks (saved to config).") }, true)
+                                1
+                            }))))
         )
     }
 
