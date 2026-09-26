@@ -5,7 +5,7 @@ import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
-import net.minecraft.world.entity.MobSpawnType
+import net.minecraft.world.Difficulty\nimport net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.level.saveddata.SavedData
@@ -19,7 +19,7 @@ object SpiderSpawnManager {
     fun tick(server: MinecraftServer) {
         val overworld = server.overworld()
         val data = HuntData.get(overworld)
-        val active = data.spiderId?.let { uuid ->
+        if (overworld.difficulty == Difficulty.PEACEFUL) {\n            if (!data.wasPeaceful) { data.wasPeaceful = true; data.setDirty() }\n            return\n        }\n        if (data.wasPeaceful) {\n            data.wasPeaceful = false\n            data.spiderId = null\n            data.remainingTicks = (SpiderConfig.peacefulExitSpawnMinutes.get() * 1200.0).toInt()\n            data.setDirty()\n            return\n        }\n        val active = data.spiderId?.let { uuid ->
             server.allLevels.asSequence().mapNotNull { it.getEntity(uuid) as? SpiderMob }.firstOrNull { it.isAlive }
         }
         if (active != null) return
@@ -30,7 +30,7 @@ object SpiderSpawnManager {
             }
             data.setDirty()
         }
-        if (data.remainingTicks > 0) {
+        if (!data.initialized) {\n            val min = SpiderConfig.firstSpawnMin.get()\n            val max = maxOf(min, SpiderConfig.firstSpawnMax.get())\n            data.remainingTicks = (Random.nextDouble(min, max) * 1200.0).toInt()\n            data.initialized = true\n            data.setDirty()\n        }\n        if (data.remainingTicks > 0) {
             data.remainingTicks--
             if (data.remainingTicks % 20 == 0) data.setDirty()
             return
@@ -39,7 +39,7 @@ object SpiderSpawnManager {
         val player = overworld.players().filter { it.isAlive }.randomOrNull() ?: return
         val minDistance = SpiderConfig.spawnDistanceMin.get()
         val maxDistance = maxOf(minDistance, SpiderConfig.spawnDistanceMax.get())
-        repeat(24) {
+        repeat(SpiderConfig.spawnAngleAttempts.get()) {
             val angle = Random.nextDouble(0.0, Math.PI * 2.0)
             val distance = Random.nextDouble(minDistance, maxDistance)
             val x = player.x + cos(angle) * distance
@@ -76,11 +76,11 @@ object SpiderSpawnManager {
     private class HuntData : SavedData() {
         var spiderId: java.util.UUID? = null
         var everSpawned = false
-        var remainingTicks = 1200
+        var remainingTicks = 0\n        var wasPeaceful = false\n        var initialized = false
 
         override fun save(tag: CompoundTag): CompoundTag {
             tag.putBoolean("everSpawned", everSpawned)
-            tag.putInt("remainingTicks", remainingTicks)
+            tag.putInt("remainingTicks", remainingTicks)\n            tag.putBoolean("wasPeaceful", wasPeaceful)\n            tag.putBoolean("initialized", initialized)
             spiderId?.let { tag.putUUID("spiderId", it) }
             return tag
         }
@@ -88,7 +88,7 @@ object SpiderSpawnManager {
         companion object {
             fun load(tag: CompoundTag) = HuntData().also {
                 it.everSpawned = tag.getBoolean("everSpawned")
-                it.remainingTicks = tag.getInt("remainingTicks")
+                it.remainingTicks = tag.getInt("remainingTicks")\n                it.wasPeaceful = tag.getBoolean("wasPeaceful")\n                it.initialized = tag.getBoolean("initialized")
                 if (tag.hasUUID("spiderId")) it.spiderId = tag.getUUID("spiderId")
             }
 

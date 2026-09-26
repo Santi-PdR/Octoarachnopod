@@ -4,11 +4,11 @@ import net.minecraftforge.common.ForgeConfigSpec
 
 object SpiderConfig {
     private val builder = ForgeConfigSpec.Builder()
-    val firstSpawnMin = builder.defineInRange("spawnMinMinutes", 1.0, 0.05, 1440.0)
+    val firstSpawnMin = builder.defineInRange("spawnMinMinutes", 1.0, 0.05, 1440.0)\n    val peacefulExitSpawnMinutes = builder.defineInRange("peacefulExitSpawnMinutes", 1.0, 0.05, 1440.0)
     val firstSpawnMax = builder.defineInRange("spawnMaxMinutes", 1.0, 0.05, 1440.0)
     val respawnAfterKill = builder.defineInRange("respawnAfterKillMinutes", 40.0, 0.05, 1440.0)
     val permadeath = builder.define("permadeath", false)
-    val spawnDistanceMin = builder.defineInRange("spawnDistanceMin", 30.0, 4.0, 128.0)
+    val relocateDistance = builder.defineInRange("relocateDistanceBlocks", 192.0, 0.0, 4096.0)\n    val spawnAngleAttempts = builder.defineInRange("spawnAngleAttempts", 24, 4, 1024)\n    val spawnCloseFallbackDistance = builder.defineInRange("spawnCloseFallbackDistance", 6.0, 0.0, 128.0)\n    val spawnMaxVerticalSearch = builder.defineInRange("spawnMaxVerticalSearch", 48, 4, 384)\n    val spawnDistanceMin = builder.defineInRange("spawnDistanceMin", 30.0, 4.0, 128.0)
     val spawnDistanceMax = builder.defineInRange("spawnDistanceMax", 34.0, 4.0, 128.0)
     val chaseDistance = builder.defineInRange("chaseDistance", 64.0, 8.0, 256.0)
     val chaseSpeed = builder.defineInRange("chaseSpeedBlocksPerSecond", 8.0, 0.5, 40.0)
