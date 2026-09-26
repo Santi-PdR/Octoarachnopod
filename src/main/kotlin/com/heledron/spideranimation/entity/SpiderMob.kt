@@ -288,7 +288,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val idleScale = when (variant) {
                 Variant.POISON -> SpiderConfig.poisonSize.get()
                 Variant.HUNTER -> SpiderConfig.hunterSize.get()
-                else -> 1.0
+                Variant.NETHERITE, Variant.CAMO -> max(
+                    SpiderConfig.maxSize.get(),
+                    if (SpiderConfig.growInWater.get()) waterGrowthScale(serverLevel) ?: 0.0 else 0.0
+                )
             }
             currentScale += (idleScale - currentScale) * 0.03
             wander(serverLevel)
@@ -312,12 +315,16 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
         val near = SpiderConfig.sizeNearDistance.get()
         val far = max(near + 0.01, SpiderConfig.sizeFarDistance.get())
+        val waterScale = if (variant != Variant.HUNTER && SpiderConfig.growInWater.get()) {
+            waterGrowthScale(serverLevel)
+        } else null
+        val distanceScale = SpiderConfig.minSize.get() +
+            (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
+            ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
         val desiredScale = when (variant) {
             Variant.POISON -> SpiderConfig.poisonSize.get()
             Variant.HUNTER -> SpiderConfig.hunterSize.get()
-            else -> SpiderConfig.minSize.get() +
-                (SpiderConfig.maxSize.get() - SpiderConfig.minSize.get()) *
-                ((distance - near) / (far - near)).coerceIn(0.0, 1.0)
+            Variant.NETHERITE, Variant.CAMO -> max(distanceScale, waterScale ?: 0.0)
         }
         val adjustment = if (desiredScale > currentScale) SpiderConfig.growPercentPerTick.get() / 100.0 else SpiderConfig.shrinkPercentPerTick.get() / 100.0
         currentScale += (desiredScale - currentScale) * adjustment
@@ -363,6 +370,12 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 attackTimer = SpiderConfig.attackCooldown.get()
             }
         }
+    }
+
+    private fun waterGrowthScale(serverLevel: ServerLevel): Double? {
+        val floorY = SafeGroundFinder.findFloorBelow(serverLevel, x, y, z, 16) ?: return null
+        val waterDepth = SafeGroundFinder.waterDepthAbove(serverLevel, x, floorY, z, 16)
+        return if (waterDepth <= 1.0) null else (waterDepth + 0.5) / 1.1
     }
 
     private fun wander(serverLevel: ServerLevel) {
