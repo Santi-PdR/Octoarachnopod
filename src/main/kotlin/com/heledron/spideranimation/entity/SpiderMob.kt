@@ -97,8 +97,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var riderInputReceivedAt = Long.MIN_VALUE
     private var wasOnGround = true
     private val footPositions = mutableListOf<Vec3?>()
+    private val footGrounded = mutableListOf<Boolean>()
     private val footStepStarts = mutableListOf<Vec3?>()
     private val footStepTargets = mutableListOf<Vec3?>()
+    private val footStepTargetGrounded = mutableListOf<Boolean>()
     private val footStepProgress = mutableListOf<Double>()
     private val footStepStartedAt = mutableListOf<Int>()
     private val footStepStoppedAt = mutableListOf<Int>()
@@ -846,15 +848,19 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (parts.size != layouts.size * 3) return
         if (footPositions.size != layouts.size) {
             footPositions.clear()
+            footGrounded.clear()
             footStepStarts.clear()
             footStepTargets.clear()
+            footStepTargetGrounded.clear()
             footStepProgress.clear()
             footStepStartedAt.clear()
             footStepStoppedAt.clear()
             repeat(layouts.size) {
                 footPositions += null
+                footGrounded += false
                 footStepStarts += null
                 footStepTargets += null
+                footStepTargetGrounded += false
                 footStepProgress += 0.0
                 footStepStartedAt += tickCount - 1
                 footStepStoppedAt += tickCount - 1
@@ -873,10 +879,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         // a smoothed up axis, so the leg roots lean with uneven terrain.
         fun average(points: List<Vec3>): Vec3? =
             if (points.isEmpty()) null else points.reduce(Vec3::add).scale(1.0 / points.size)
-        val leftFeet = layouts.indices.filter { layouts[it].side < 0.0 }.mapNotNull { footPositions[it] }
-        val rightFeet = layouts.indices.filter { layouts[it].side > 0.0 }.mapNotNull { footPositions[it] }
-        val frontFeet = layouts.indices.filter { layouts[it].rootZ >= 0.0 }.mapNotNull { footPositions[it] }
-        val backFeet = layouts.indices.filter { layouts[it].rootZ < 0.0 }.mapNotNull { footPositions[it] }
+        val supportedFeet = layouts.indices.filter {
+            footGrounded[it] && footStepTargets[it] == null
+        }
+        val leftFeet = supportedFeet.filter { layouts[it].side < 0.0 }.mapNotNull { footPositions[it] }
+        val rightFeet = supportedFeet.filter { layouts[it].side > 0.0 }.mapNotNull { footPositions[it] }
+        val frontFeet = supportedFeet.filter { layouts[it].rootZ >= 0.0 }.mapNotNull { footPositions[it] }
+        val backFeet = supportedFeet.filter { layouts[it].rootZ < 0.0 }.mapNotNull { footPositions[it] }
         val lateral = average(rightFeet)?.subtract(average(leftFeet) ?: Vec3.ZERO)
         val longitudinal = average(frontFeet)?.subtract(average(backFeet) ?: Vec3.ZERO)
         if (leftFeet.isNotEmpty() && rightFeet.isNotEmpty() &&
@@ -928,15 +937,20 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 .add(lookAhead)
             var planted = footPositions[index]
             if (planted == null) {
-                planted = probeGround(level, plannedFoot, scale)
+                val initialProbe = probeGround(level, plannedFoot, scale)
+                planted = initialProbe.first
                 footPositions[index] = planted
+                footGrounded[index] = initialProbe.second
             }
             if (footStepTargets[index] == null &&
-                planted.subtract(plannedFoot).horizontalDistance() > triggerRadius * scale &&
-                canStartLegStep(index, layouts, planted, plannedFoot, scale, triggerRadius)
+                (!footGrounded[index] || planted.subtract(plannedFoot).horizontalDistance() > triggerRadius * scale) &&
+                canStartLegStep(index, layouts, planted, plannedFoot, scale, triggerRadius, footGrounded[index])
             ) {
                 footStepStarts[index] = planted
-                footStepTargets[index] = probeGround(level, plannedFoot, scale)
+                val targetProbe = probeGround(level, plannedFoot, scale)
+                footStepTargets[index] = targetProbe.first
+                footStepTargetGrounded[index] = targetProbe.second
+                footGrounded[index] = false
                 footStepProgress[index] = 0.0
                 footStepStartedAt[index] = tickCount
             }
@@ -972,6 +986,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 if (horizontalDistance <= speed && kotlin.math.abs(nextY - destination.y) <= speed) {
                     playFootstepSound(level, destination)
                     footPositions[index] = destination
+                    footGrounded[index] = footStepTargetGrounded[index]
                     footStepStarts[index] = null
                     footStepTargets[index] = null
                     footStepProgress[index] = 0.0
@@ -1013,8 +1028,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         planted: Vec3?,
         planned: Vec3,
         scale: Double,
-        triggerRadius: Double
+        triggerRadius: Double,
+        grounded: Boolean
     ): Boolean {
+        if (!grounded) return true
         val crossPair = listOf(
             index - 2,
             index + 2,
@@ -1030,7 +1047,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         // starts of diagonal partners by the configured one-tick cooldowns.
         if (crossPair.any { footStepTargets[it] != null }) return false
         if (crossPair.any {
-                footPositions[it] != null && tickCount - footStepStoppedAt[it] < 1
+                footGrounded[it] && footStepTargets[it] == null && tickCount - footStepStoppedAt[it] < 1
             }
         ) return false
         if (samePair.any {
@@ -1041,7 +1058,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val wantsToMove = planted == null || planted.subtract(planned).horizontalDistance() > triggerRadius * scale
         val alreadyAtTarget = planted != null && planted.distanceToSqr(planned) < 0.01
         val otherSupport = footPositions.indices.any {
-            it != index && footPositions[it] != null && footStepTargets[it] == null
+            it != index && footGrounded[it] && footPositions[it] != null && footStepTargets[it] == null
         }
         return wantsToMove && !alreadyAtTarget && (onGround() || otherSupport)
     }
@@ -1143,7 +1160,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         )
     }
 
-    private fun probeGround(level: ServerLevel, planned: Vec3, scale: Double): Vec3 {
+    private fun probeGround(level: ServerLevel, planned: Vec3, scale: Double): Pair<Vec3, Boolean> {
         fun raycast(x: Double, z: Double): Vec3? {
             val hit = level.clip(
                 ClipContext(
@@ -1158,7 +1175,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
 
         val main = raycast(planned.x, planned.z)
-        if (main != null && main.y in (planned.y - 0.24 * scale)..(planned.y + 1.5 * scale)) return main
+        if (main != null && main.y in (planned.y - 0.24 * scale)..(planned.y + 1.5 * scale)) return main to true
 
         // The original scans the center and neighboring block edges when the
         // direct ray finds no usable surface, helping legs land on stairs and ledges.
@@ -1182,7 +1199,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val aheadPos = BlockPos.containing(lookAhead.x, lookAhead.y, lookAhead.z)
         val obstructed = !level.getBlockState(aheadPos).getCollisionShape(level, aheadPos).isEmpty
         val preferred = if (obstructed) lookAhead.add(0.0, 0.5 * scale, 0.0) else lookAhead
-        return candidates.minByOrNull { it.distanceToSqr(preferred) } ?: planned
+        val ground = candidates.minByOrNull { it.distanceToSqr(preferred) }
+        return if (ground != null) ground to true else planned to false
     }
 
     private fun segment(display: BlockDisplay, start: Vec3, end: Vec3, width: Float) {
