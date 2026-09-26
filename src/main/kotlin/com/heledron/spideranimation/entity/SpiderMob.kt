@@ -257,7 +257,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val target = serverLevel.players()
             .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || night) }
             .minByOrNull { it.distanceToSqr(this) }
-        val distance = target?.let(::distanceTo) ?: Double.MAX_VALUE
+        val distance: Double = if (target == null) Double.MAX_VALUE else distanceTo(target)
         val detectionDistance = SpiderConfig.chaseDistance.get()
         val allowedDistance = if (aiMode == AiMode.WANDER) {
             detectionDistance
