@@ -73,6 +73,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private val footStepStarts = mutableListOf<Vec3?>()
     private val footStepTargets = mutableListOf<Vec3?>()
     private val footStepProgress = mutableListOf<Double>()
+    private val legBlockStates = mutableListOf<BlockState?>()
     private val bossEvent = ServerBossEvent(
         Component.literal("Netherite Octoarachnopod"),
         BossEvent.BossBarColor.PURPLE,
@@ -456,6 +457,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 footStepProgress += 0.0
             }
         }
+        if (legBlockStates.size != layouts.size) {
+            legBlockStates.clear()
+            repeat(layouts.size) { legBlockStates += null }
+        }
         val scale = currentScale
         val yaw = Math.toRadians(yRot.toDouble())
         val forward = Vec3(-sin(yaw), 0.0, cos(yaw))
@@ -505,7 +510,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 camoBlockUnder(level, foot)?.let { groundBlock ->
                     for (segmentIndex in 0 until 3) {
                         val display = parts[index * 3 + segmentIndex]
-                        if (display.getBlockState() != groundBlock) display.setBlockState(groundBlock)
+                        if (legBlockStates[index] != groundBlock) {
+                            display.setBlockState(groundBlock)
+                            legBlockStates[index] = groundBlock
+                        }
                     }
                 }
             }
