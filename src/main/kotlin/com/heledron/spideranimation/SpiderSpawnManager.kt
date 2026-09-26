@@ -72,6 +72,41 @@ object SpiderSpawnManager {
         }
     }
 
+    fun onUnexpectedRemoval(spider: SpiderMob, reason: Entity.RemovalReason) {
+        if (reason.shouldDestroy() || spider.health <= 0.0f || spider.personalOwner != null) return
+        val level = spider.level() as? ServerLevel ?: return
+        val server = level.server
+        if (activeServer !== server) return
+        val data = HuntData.get(server.overworld())
+        if (data.spiderId != spider.uuid) return
+
+        data.abandonedTicks = 0
+        data.strandedTicks = 0
+        if (server.overworld().difficulty == Difficulty.PEACEFUL) {
+            data.spiderId = null
+            data.setDirty()
+            return
+        }
+
+        val nearestPlayer = server.playerList.players
+            .filter { it.isAlive }
+            .minByOrNull { it.distanceToSqr(spider) }
+        val replacement = nearestPlayer?.let(::spawnNear)
+        if (replacement != null) {
+            data.spiderId = replacement.uuid
+            data.everSpawned = true
+            data.remainingTicks = 0
+            data.scheduleKind = "NONE"
+            data.scheduleElapsed = 0
+        } else {
+            data.spiderId = null
+            data.remainingTicks = 200
+            data.scheduleKind = "RETRY"
+            data.scheduleElapsed = 0
+        }
+        data.setDirty()
+    }
+
     fun tick(server: MinecraftServer) {
         val overworld = server.overworld()
         val data = HuntData.get(overworld)
