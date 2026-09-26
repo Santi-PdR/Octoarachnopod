@@ -75,6 +75,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var currentScale = 1.0
     private var wanderTicks = 0
     private var wanderAngle = 0.0
+    private var chaseSteerSign = 1
     private var patrolAnchor: Vec3? = null
     private var wanderGoal: BlockPos? = null
     private var wanderGoalExpiresAt = 0
@@ -442,10 +443,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 move(MoverType.SELF, Vec3(0.0, -0.05 * currentScale, 0.0))
             }
         } else if (SpiderConfig.chasePathfinding.get()) {
-            val passageWaypoint = findPassageWaypoint(serverLevel, target)
             if (navigation.isDone || tickCount % 10 == 0) {
                 val baseSpeed = getAttributeValue(Attributes.MOVEMENT_SPEED).coerceAtLeast(0.01)
-                val destination = passageWaypoint ?: target.position()
+                val passageWaypoint = findPassageWaypoint(serverLevel, target)
+                val steerWaypoint = if (passageWaypoint == null) findSteerWaypoint(serverLevel, target) else null
+                val destination = passageWaypoint ?: steerWaypoint ?: target.position()
                 navigation.moveTo(destination.x, destination.y, destination.z, speed / baseSpeed)
             }
         } else {
@@ -547,6 +549,69 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
         return if (opening.alongX) Vec3(waypointAlong, opening.y, opening.z)
         else Vec3(opening.x, opening.y, waypointAlong)
+    }
+
+    private fun findSteerWaypoint(level: ServerLevel, target: Player): Vec3? {
+        val bodyOffset = currentScale * 0.5
+        val directHit = level.clip(
+            ClipContext(
+                Vec3(x, y + bodyOffset, z),
+                Vec3(target.x, target.y + bodyOffset, target.z),
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                this
+            )
+        )
+        if (directHit.type != HitResult.Type.BLOCK) return null
+
+        val dx = target.x - x
+        val dz = target.z - z
+        val distance = sqrt(dx * dx + dz * dz)
+        if (distance < 1.5) return null
+        val forwardX = dx / distance
+        val forwardZ = dz / distance
+        val angles = doubleArrayOf(0.611, 1.222, 1.833)
+        for (angle in angles) {
+            for (sign in intArrayOf(chaseSteerSign, -chaseSteerSign)) {
+                val signedAngle = angle * sign
+                val directionX = forwardX * cos(signedAngle) - forwardZ * sin(signedAngle)
+                val directionZ = forwardX * sin(signedAngle) + forwardZ * cos(signedAngle)
+                var previous = Vec3(x, y + bodyOffset, z)
+                var endY = y
+                var safe = true
+                for (step in 1..4) {
+                    val nextX = x + directionX * step
+                    val nextZ = z + directionZ * step
+                    val groundY = SafeGroundFinder.findSafeYNear(
+                        level, nextX, nextZ, y, maxSearch = 4
+                    )
+                    if (groundY == null || kotlin.math.abs(groundY - y) > 2.0) {
+                        safe = false
+                        break
+                    }
+                    val nextBounds = boundingBox.move(nextX - x, groundY - y, nextZ - z)
+                    if (!level.noCollision(this, nextBounds)) {
+                        safe = false
+                        break
+                    }
+                    val next = Vec3(nextX, groundY + bodyOffset, nextZ)
+                    val hit = level.clip(
+                        ClipContext(previous, next, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this)
+                    )
+                    if (hit.type == HitResult.Type.BLOCK) {
+                        safe = false
+                        break
+                    }
+                    previous = next
+                    endY = groundY
+                }
+                if (safe) {
+                    chaseSteerSign = sign
+                    return Vec3(x + directionX * 4.0, endY, z + directionZ * 4.0)
+                }
+            }
+        }
+        return null
     }
 
     private fun approachScale(targetScale: Double) {
