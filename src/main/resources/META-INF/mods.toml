@@ -5,7 +5,7 @@ license="Custom license; authorized Forge port"
 modId="arachnomod"
 version="${version}"
 displayName="Octoarachnopod"
-authors="iR3DN4X, Santi-PdR"
+authors="iR3DN4X, TheCymaera, Santi-PdR"
 description='''A procedural giant spider that stalks players, with multiple variants, taming and configurable behavior. Forge 1.20.1 port.'''
 [[dependencies.arachnomod]]
 modId="forge"
