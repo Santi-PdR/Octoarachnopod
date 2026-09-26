@@ -161,7 +161,7 @@ object SpiderConfig {
                         is Int -> (current as? Number)?.toInt() == oldValue
                         else -> current == oldValue
                     }
-                    if (matches) config.set(path, newValue)
+                    if (matches) config.set<Any>(path, newValue)
                 }
 
                 if (fileVersion < 2) {
@@ -173,19 +173,19 @@ object SpiderConfig {
                 if (fileVersion < 4) {
                     val oldHealth = (config.get<Number>("maxHealth"))?.toDouble()
                     if (oldHealth != null && oldHealth != 600.0) {
-                        config.set("netheriteMaxHealth", oldHealth)
-                        config.set("camoMaxHealth", oldHealth)
+                        config.set<Any>("netheriteMaxHealth", oldHealth)
+                        config.set<Any>("camoMaxHealth", oldHealth)
                     }
-                    config.remove("maxHealth")
+                    config.remove<Any>("maxHealth")
                 }
                 if (fileVersion < 5) {
                     val oldDamage = (config.get<Number>("attackDamageHearts"))?.toDouble()
                     if (oldDamage != null && oldDamage != 6.0) {
-                        config.set("netheriteAttackDamageHearts", oldDamage)
-                        config.set("camoAttackDamageHearts", oldDamage)
-                        config.set("hunterAttackDamageHearts", oldDamage)
+                        config.set<Any>("netheriteAttackDamageHearts", oldDamage)
+                        config.set<Any>("camoAttackDamageHearts", oldDamage)
+                        config.set<Any>("hunterAttackDamageHearts", oldDamage)
                     }
-                    config.remove("attackDamageHearts")
+                    config.remove<Any>("attackDamageHearts")
                 }
                 config.set("configVersion", 5)
                 config.save()
