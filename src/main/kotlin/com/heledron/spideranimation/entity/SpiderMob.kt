@@ -420,8 +420,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         setYRot(yaw)
         yRotO = yaw
         if (variant == Variant.HUNTER) {
-            val horizontalDistance = kotlin.math.sqrt(dx * dx + dz * dz)
-            val playerLooksFromFarAway = distance > 6.0 && serverLevel.players().any(::isLookingAt)
+            val playerLooksFromFarAway = horizontalDistance > 6.0 && serverLevel.players().any(::isLookingAt)
             val cannotReachPlayerHeight = kotlin.math.abs((y - 1.1 * currentScale) - target.y) > 2.0 &&
                 horizontalDistance < 8.0
             if (playerLooksFromFarAway || cannotReachPlayerHeight) {
