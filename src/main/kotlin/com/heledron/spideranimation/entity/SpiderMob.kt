@@ -48,7 +48,7 @@ import kotlin.math.sin
 class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, level) {
     enum class Variant { NETHERITE, CAMO, POISON, HUNTER }
     private enum class AiMode { WANDER, ALERT, CHASE }
-    private data class LegLayout(val rootZ: Double, val side: Double, val restX: Double, val restZ: Double, val reach: Double)
+    private data class LegLayout(val rootZ: Double, val side: Double, val restX: Double, val restZ: Double, val segmentLength: Double)
 
     var variant: Variant = Variant.NETHERITE
         private set
@@ -397,21 +397,21 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val rootZ: Double
             val restX: Double
             val restZ: Double
-            val reach: Double
+            val segmentLength: Double
             if (variant == Variant.NETHERITE) {
                 val q = if (pairs <= 1) 0.5 else index.toDouble() / (pairs - 1)
                 rootZ = 0.1 - 0.3 * q
                 restX = 1.0 + 0.3 * sin(Math.PI * q)
                 restZ = 1.6 - 4.1 * q
-                reach = 1.05 + 0.55 * q
+                segmentLength = 1.05 + 0.55 * q * q
             } else {
                 rootZ = value(0)
                 restX = value(1)
                 restZ = value(2)
-                reach = value(3)
+                segmentLength = value(3)
             }
-            layouts += LegLayout(rootZ, -1.0, restX, restZ, reach)
-            layouts += LegLayout(rootZ, 1.0, restX, restZ, reach)
+            layouts += LegLayout(rootZ, -1.0, restX, restZ, segmentLength)
+            layouts += LegLayout(rootZ, 1.0, restX, restZ, segmentLength)
         }
         if (count % 2 == 1) layouts += LegLayout(0.15, 0.0, 0.0, 1.8, 1.1)
         return layouts
@@ -500,12 +500,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             } else {
                 planted
             }
-            val firstJoint = root.lerp(foot, 0.28)
-                .add(right.scale(leg.side * leg.reach * 0.42 * scale))
-                .add(0.0, -0.12 * scale, 0.0)
-            val secondJoint = root.lerp(foot, 0.64)
-                .add(right.scale(leg.side * leg.reach * 0.55 * scale))
-                .add(0.0, -0.28 * scale, 0.0)
+            val points = solveLeg(root, foot, right.scale(leg.side), leg.segmentLength * scale)
             if (variant == Variant.CAMO) {
                 camoBlockUnder(level, foot)?.let { groundBlock ->
                     for (segmentIndex in 0 until 3) {
@@ -514,7 +509,6 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     }
                 }
             }
-            val points = listOf(root, firstJoint, secondJoint, foot)
             for (segmentIndex in 0 until 3) {
                 val taper = 0.28125 + (0.09375 - 0.28125) * segmentIndex / 2.0
                 segment(
@@ -525,6 +519,32 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 )
             }
         }
+    }
+
+    private fun solveLeg(root: Vec3, foot: Vec3, side: Vec3, segmentLength: Double): List<Vec3> {
+        val fallback = if (side.lengthSqr() > 1.0e-8) side.normalize() else Vec3(0.0, 0.0, 1.0)
+        val points = arrayOf(
+            root,
+            root.lerp(foot, 1.0 / 3.0).add(fallback.scale(segmentLength * 0.65)),
+            root.lerp(foot, 2.0 / 3.0).add(fallback.scale(segmentLength * 0.65)),
+            foot
+        )
+        repeat(20) {
+            points[3] = foot
+            for (index in 2 downTo 0) {
+                val offset = points[index].subtract(points[index + 1])
+                val direction = if (offset.lengthSqr() > 1.0e-8) offset.normalize() else fallback
+                points[index] = points[index + 1].add(direction.scale(segmentLength))
+            }
+            points[0] = root
+            for (index in 0..2) {
+                val offset = points[index + 1].subtract(points[index])
+                val direction = if (offset.lengthSqr() > 1.0e-8) offset.normalize() else fallback
+                points[index + 1] = points[index].add(direction.scale(segmentLength))
+            }
+            if (points[3].distanceToSqr(foot) < 1.0e-4) return points.toList()
+        }
+        return points.toList()
     }
 
     private fun camoBlockUnder(level: ServerLevel, position: Vec3): BlockState? {
