@@ -243,7 +243,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             hunt(serverLevel)
         }
 
-        phase += if (deltaMovement.horizontalDistance() > 0.015) 0.45 else 0.08
+        if (deltaMovement.horizontalDistance() > 0.015) phase += 0.45
         updateModel()
         bossEvent.progress = (health / maxHealth).coerceIn(0f, 1f)
         if (variant == Variant.HUNTER && SpiderConfig.hunterBlindnessRange.get() > 0 && tickCount % 20 == 0) {
@@ -468,11 +468,6 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 )
             }
         }
-    }
-
-    private fun box(display: BlockDisplay, center: Vec3, scale: Vector3f) {
-        display.setPos(center.x, center.y, center.z)
-        display.setTransformation(Transformation(Vector3f(-0.5f, -0.5f, -0.5f), Quaternionf(), scale, Quaternionf()))
     }
 
     private fun segment(display: BlockDisplay, start: Vec3, end: Vec3, width: Float) {
