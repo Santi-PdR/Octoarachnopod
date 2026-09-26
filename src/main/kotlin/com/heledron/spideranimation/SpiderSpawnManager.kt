@@ -24,7 +24,8 @@ object SpiderSpawnManager {
     private fun rollFirstSpawnTicks(): Int {
         val min = SpiderConfig.firstSpawnMin.get()
         val max = maxOf(min, SpiderConfig.firstSpawnMax.get())
-        return (Random.nextDouble(min, max) * 1200.0).toInt().coerceAtLeast(1)
+        val delayMinutes = if (max <= min) min else Random.nextDouble(min, max)
+        return (delayMinutes * 1200.0).toInt().coerceAtLeast(1)
     }
 
     private fun killRespawnTicks(): Int =
