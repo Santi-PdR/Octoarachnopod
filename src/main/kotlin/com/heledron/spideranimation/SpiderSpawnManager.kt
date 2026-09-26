@@ -101,6 +101,7 @@ object SpiderSpawnManager {
         // The stored entity can be temporarily absent because its chunk is unloaded.
         // Only SpiderMob.die clears this ID, so never spawn a duplicate from a missing lookup.
         if (data.spiderId != null) return
+        if (server.playerList.players.none { it.isAlive }) return
         if (!data.initialized) {
             data.remainingTicks = rollFirstSpawnTicks()
             data.scheduleKind = "FIRST_SPAWN"
@@ -115,7 +116,7 @@ object SpiderSpawnManager {
             return
         }
         if (data.everSpawned && SpiderConfig.permadeath.get()) return
-        val player = overworld.players().filter { it.isAlive }.randomOrNull() ?: return
+        val player = server.playerList.players.filter { it.isAlive }.randomOrNull() ?: return
         val spider = spawnNear(player)
         if (spider != null) {
             data.spiderId = spider.uuid
