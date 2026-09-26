@@ -1,7 +1,11 @@
 package com.heledron.spideranimation
 
+import com.mojang.brigadier.arguments.StringArgumentType
+import com.mojang.brigadier.builder.LiteralArgumentBuilder
+import net.minecraft.commands.CommandSourceStack
 import com.heledron.spideranimation.entity.SpiderMob
 import net.minecraft.world.item.CreativeModeTabs
+import net.minecraftforge.common.ForgeConfigSpec
 import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent
@@ -96,17 +100,54 @@ class SpiderAnimationMod {
                         context.source.sendSuccess({ Component.literal("Spider chase distance set to $blocks blocks (saved to config).") }, true)
                         1
                     }))
-                .then(Commands.literal("config").requires { it.hasPermission(2) }
-                    .then(Commands.literal("chaseDistance")
-                        .then(Commands.literal("set")
-                            .then(Commands.argument("blocks", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(8.0, 256.0)).executes { context ->
-                                val blocks = com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "blocks")
-                                SpiderConfig.chaseDistance.set(blocks)
-                                SpiderConfig.SPEC.save()
-                                context.source.sendSuccess({ Component.literal("chaseDistance set to $blocks (saved to config).") }, true)
-                                1
-                            }))))
+                .then(configCommand())
         )
+    }
+
+    private fun configCommand(): LiteralArgumentBuilder<CommandSourceStack> {
+        val root = Commands.literal("config").requires { it.hasPermission(2) }
+        SpiderConfig.commandEntries.forEach { (path, entry) ->
+            root.then(
+                Commands.literal(path)
+                    .then(Commands.literal("get").executes { context ->
+                        context.source.sendSuccess(
+                            { Component.literal("Spider config '$path' is ${entry.get()}.") },
+                            false
+                        )
+                        1
+                    })
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("value", StringArgumentType.word()).executes { context ->
+                            val raw = StringArgumentType.getString(context, "value")
+                            val error = runCatching {
+                                setConfigValue(entry, raw)
+                                SpiderConfig.SPEC.save()
+                            }.exceptionOrNull()
+                            if (error != null) {
+                                context.source.sendFailure(Component.literal("Invalid value for '$path': ${error.message ?: raw}"))
+                                0
+                            } else {
+                                context.source.sendSuccess(
+                                    { Component.literal("Spider config '$path' set to ${entry.get()} (saved).") },
+                                    true
+                                )
+                                1
+                            }
+                        }))
+            )
+        }
+        return root
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun setConfigValue(entry: ForgeConfigSpec.ConfigValue<*>, raw: String) {
+        when (entry.get()) {
+            is Boolean -> (entry as ForgeConfigSpec.ConfigValue<Boolean>).set(raw.toBooleanStrict())
+            is Int -> (entry as ForgeConfigSpec.ConfigValue<Int>).set(raw.toInt())
+            is Double -> (entry as ForgeConfigSpec.ConfigValue<Double>).set(raw.toDouble())
+            is String -> (entry as ForgeConfigSpec.ConfigValue<String>).set(raw)
+            else -> throw IllegalArgumentException("Unsupported config value type.")
+        }
     }
 
     private fun personalSpiders(player: net.minecraft.server.level.ServerPlayer): List<SpiderMob> {
