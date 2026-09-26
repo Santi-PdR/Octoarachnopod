@@ -494,9 +494,13 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
 
         val scaleSpeed = scaleToSpeedFactor(currentScale)
-        val variantSpeed = if (variant == Variant.HUNTER) SpiderConfig.hunterSpeedMultiplier.get() else 1.0
+        val variantSpeed = if (variant == Variant.HUNTER) {
+            SpiderConfig.hunterSpeedMultiplier.get()
+        } else {
+            scaleSpeed
+        }
         val enragedSpeed = if (enraged) SpiderConfig.enragedSpeedMultiplier.get() else 1.0
-        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * scaleSpeed * variantSpeed * enragedSpeed
+        val speed = SpiderConfig.chaseSpeed.get() / 20.0 * variantSpeed * enragedSpeed
         if (variant == Variant.POISON && lungeTimer in 1..7) {
             navigation.stop()
             if (lungeTimer == 7) {
