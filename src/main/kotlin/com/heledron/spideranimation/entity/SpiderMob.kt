@@ -857,12 +857,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val points = solveLeg(root, foot, right.scale(leg.side), leg.segmentLength * scale)
             if (variant == Variant.CAMO) {
                 camoBlockUnder(level, foot)?.let { groundBlock ->
-                    for (segmentIndex in 0 until 3) {
-                        val display = parts[index * 3 + segmentIndex]
-                        if (legBlockStates[index] != groundBlock) {
-                            display.setBlockState(groundBlock)
-                            legBlockStates[index] = groundBlock
+                    if (legBlockStates[index] != groundBlock) {
+                        for (segmentIndex in 0 until 3) {
+                            parts[index * 3 + segmentIndex].setBlockState(groundBlock)
                         }
+                        legBlockStates[index] = groundBlock
                     }
                 }
             }
