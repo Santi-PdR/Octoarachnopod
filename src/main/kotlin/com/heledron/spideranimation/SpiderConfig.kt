@@ -9,7 +9,7 @@ object SpiderConfig {
     private val builder = ForgeConfigSpec.Builder()
     private val configVersion = builder
         .comment("Internal config-format version - do not edit.")
-        .defineInRange("configVersion", 5, 1, 5)
+        .defineInRange("configVersion", 6, 1, 6)
     val firstSpawnMin = builder.defineInRange("spawnMinMinutes", 1.0, 0.05, 1440.0)
     val peacefulExitSpawnMinutes = builder.defineInRange("peacefulExitSpawnMinutes", 1.0, 0.05, 1440.0)
     val firstSpawnMax = builder.defineInRange("spawnMaxMinutes", 1.0, 0.05, 1440.0)
@@ -21,7 +21,7 @@ object SpiderConfig {
     val spawnMaxVerticalSearch = builder.defineInRange("spawnMaxVerticalSearch", 48, 4, 384)
     val spawnDistanceMin = builder.defineInRange("spawnDistanceMin", 30.0, 4.0, 128.0)
     val spawnDistanceMax = builder.defineInRange("spawnDistanceMax", 34.0, 4.0, 128.0)
-    val chaseDistance = builder.defineInRange("chaseDistance", 64.0, 8.0, 256.0)
+    val chaseDistance = builder.defineInRange("chaseDistance", 400.0, 8.0, 400.0)
     val chaseSpeed = builder.defineInRange("chaseSpeedBlocksPerSecond", 8.0, 0.5, 40.0)
     val minSize = builder.defineInRange("minSize", 0.6, 0.1, 10.0)
     val maxSize = builder.defineInRange("maxSize", 15.0, 0.5, 50.0)
@@ -159,7 +159,7 @@ object SpiderConfig {
         "spawnCloseFallbackDistance" to (0.0 to 128.0),
         "spawnDistanceMin" to (4.0 to 128.0),
         "spawnDistanceMax" to (4.0 to 128.0),
-        "chaseDistance" to (8.0 to 256.0),
+        "chaseDistance" to (8.0 to 400.0),
         "chaseSpeedBlocksPerSecond" to (0.5 to 40.0),
         "minSize" to (0.1 to 10.0),
         "maxSize" to (0.5 to 50.0),
@@ -248,7 +248,8 @@ object SpiderConfig {
                     }
                     config.remove<Any>("attackDamageHearts")
                 }
-                config.set<Any>("configVersion", 5)
+                if (fileVersion < 6) migrateDefault("chaseDistance", 64.0, 400.0)
+                config.set<Any>("configVersion", 6)
                 config.save()
         }
     }

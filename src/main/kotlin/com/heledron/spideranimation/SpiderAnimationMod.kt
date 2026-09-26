@@ -104,7 +104,7 @@ class SpiderAnimationMod {
                     }
                 }))
                 .then(Commands.literal("chasedistance").requires { it.hasPermission(2) }
-                    .then(Commands.argument("blocks", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(8.0, 256.0)).executes { context ->
+                    .then(Commands.argument("blocks", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(8.0, 400.0)).executes { context ->
                         val blocks = com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "blocks")
                         SpiderConfig.chaseDistance.set(blocks)
                         SpiderConfig.SPEC.save()
