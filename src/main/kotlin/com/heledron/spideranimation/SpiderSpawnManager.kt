@@ -8,6 +8,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.Difficulty
+import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.levelgen.Heightmap
