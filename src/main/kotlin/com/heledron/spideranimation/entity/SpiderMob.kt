@@ -79,6 +79,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     private var committedOpening: SafeGroundFinder.Opening? = null
     private var committedOpeningUntil = 0
     private var openingRescanAt = 0
+    private var stationaryTicks = 0
+    private var groomingTimer = 0
     private val parts = mutableListOf<BlockDisplay>()
     private val footPositions = mutableListOf<Vec3?>()
     private val footStepStarts = mutableListOf<Vec3?>()
@@ -243,6 +245,16 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
         blindnessCooldown = (blindnessCooldown - 1).coerceAtLeast(0)
         if (lungeTimer > 0) lungeTimer--
+        if (!tamed && !SpiderConfig.enableWandering.get() && deltaMovement.horizontalDistanceSqr() < 0.001) {
+            stationaryTicks++
+            if (groomingTimer <= 0 && stationaryTicks > 60 &&
+                random.nextDouble() < SpiderConfig.groomingChance.get() / 20.0
+            ) groomingTimer = 100
+        } else {
+            stationaryTicks = 0
+            groomingTimer = 0
+        }
+        if (groomingTimer > 0) groomingTimer--
         val scaleBeforeUpdate = currentScale
 
         val rider = firstPassenger as? Player
@@ -677,7 +689,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         val yaw = Math.toRadians(yRot.toDouble())
         val forward = Vec3(-sin(yaw), 0.0, cos(yaw))
         val right = Vec3(forward.z, 0.0, -forward.x)
-        val anchor = Vec3(x, y + 1.1 * scale, z)
+        val idleBreathing = !tamed && !SpiderConfig.enableWandering.get() && stationaryTicks > 0
+        val breath = if (idleBreathing) sin(tickCount * 0.08) * 0.035 * scale else 0.0
+        val anchor = Vec3(x, y + 1.1 * scale + breath, z)
         layouts.forEachIndexed { index, leg ->
             val pairPhase = phase + (index / 2) * Math.PI
             val stride = sin(pairPhase) * 0.25 * scale
@@ -700,7 +714,17 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 footStepProgress[index] = 0.0
             }
             val destination = footStepTargets[index]
-            val foot = if (destination != null) {
+            val foot = if (groomingTimer > 0 && index < 2) {
+                val progress = 1.0 - groomingTimer / 100.0
+                val edge = ((progress / 0.2).coerceAtMost(1.0) * ((1.0 - progress) / 0.2).coerceAtMost(1.0)).coerceIn(0.0, 1.0)
+                val smooth = edge * edge * (3.0 - 2.0 * edge)
+                val mouth = anchor.add(forward.scale(0.5 * scale)).add(0.0, -0.05 * scale, 0.0)
+                val sideSign = if (index == 0) -1.0 else 1.0
+                val rub = if (progress in 0.2..0.8) 1.0 else 0.0
+                mouth.add(right.scale(0.15 * sideSign * scale))
+                    .add(0.0, sin(smooth * Math.PI) * 0.4 * scale + sin(progress * Math.PI * 6.0) * 0.08 * scale * rub, 0.0)
+                    .add(forward.scale(cos(progress * Math.PI * 6.0) * 0.04 * scale * rub))
+            } else if (destination != null) {
                 val progress = (footStepProgress[index] + (SpiderConfig.legStepSpeed.get() / 5.0).coerceIn(0.05, 1.0)).coerceAtMost(1.0)
                 footStepProgress[index] = progress
                 val start = footStepStarts[index] ?: planted
