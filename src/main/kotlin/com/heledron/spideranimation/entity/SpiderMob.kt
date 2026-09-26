@@ -416,9 +416,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 }
             } else if (lungeTimer in 1..6 && target.distanceToSqr(this) <= attackReach * attackReach) {
                 val damage = SpiderConfig.poisonAttackDamageHearts.get().toFloat() * 2f
-                if (target.hurt(damageSources().mobAttack(this), damage)) {
-                    target.addEffect(MobEffectInstance(MobEffects.POISON, (SpiderConfig.poisonEffectSeconds.get() * 20).toInt(), 1))
-                }
+                target.hurt(damageSources().mobAttack(this), damage)
+                target.addEffect(MobEffectInstance(MobEffects.POISON, (SpiderConfig.poisonEffectSeconds.get() * 20).toInt(), 1))
                 lungeTimer = 0
             }
         } else if (target.distanceToSqr(this) <= attackReach * attackReach && attackTimer == 0) {
@@ -428,10 +427,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 Variant.CAMO -> SpiderConfig.camoAttackDamageHearts.get().toFloat() * 2f
                 Variant.POISON -> 0f
             }
-            if (target.hurt(damageSources().mobAttack(this), damage)) {
-                if (variant == Variant.HUNTER) target.addEffect(MobEffectInstance(MobEffects.BLINDNESS, (SpiderConfig.hunterBlindnessSeconds.get() * 20).toInt(), 0))
-                attackTimer = SpiderConfig.attackCooldown.get()
-            }
+            target.hurt(damageSources().mobAttack(this), damage)
+            attackTimer = SpiderConfig.attackCooldown.get()
         }
     }
 
