@@ -156,7 +156,7 @@ object SpiderSpawnManager {
             val pos = BlockPos.containing(x, safeY, z)
             val spider = ModEntities.SPIDER.get().create(level) ?: return@repeat
             spider.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
-            spider.moveTo(x, y.toDouble(), z, Random.nextFloat() * 360f, 0f)
+            spider.moveTo(x, safeY, z, Random.nextFloat() * 360f, 0f)
             spider.naturalEncounter = true
             spider.chooseVariant()
             if (level.addFreshEntity(spider)) return spider
