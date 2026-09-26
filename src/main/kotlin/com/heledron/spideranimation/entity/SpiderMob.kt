@@ -909,17 +909,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             .add(supportNormal.scale(1.1 * scale))
             .add(0.0, breath, 0.0)
         layouts.forEachIndexed { index, leg ->
-            val pairIndex = index / 2
-            val isLeftLeg = leg.side < 0.0
-            val diagonalOne = (pairIndex % 2 == 0) == isLeftLeg
-            val pairPhase = phase + if (diagonalOne) 0.0 else Math.PI
-            val stride = sin(pairPhase) * 0.25 * scale
-            val lift = max(0.0, sin(pairPhase)) * 0.2 * scale
             val root = anchor.add(bodyForward.scale(leg.rootZ * scale))
                 .add(bodyRight.scale(leg.side * 0.18 * scale))
-            val plannedFoot = Vec3(x, y + 0.04 * scale + lift, z)
+            // The source gait places feet from each leg's rest pose and looks ahead
+            // along actual motion; it does not swing feet on a global sine phase.
+            val horizontalVelocity = deltaMovement.multiply(1.0, 0.0, 1.0)
+            val lookAhead = if (horizontalVelocity.lengthSqr() > 1.0e-6) {
+                horizontalVelocity.normalize().scale(0.48 * scale)
+            } else Vec3.ZERO
+            val plannedFoot = Vec3(x, y + 0.04 * scale, z)
                 .add(right.scale(leg.side * leg.restX * scale))
-                .add(forward.scale((leg.restZ + stride) * scale))
+                .add(forward.scale(leg.restZ * scale))
+                .add(lookAhead)
             var planted = footPositions[index]
             if (planted == null) {
                 planted = probeGround(level, plannedFoot, scale)
@@ -946,19 +947,33 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                     .add(0.0, sin(smooth * Math.PI) * 0.4 * scale + sin(progress * Math.PI * 6.0) * 0.08 * scale * rub, 0.0)
                     .add(forward.scale(cos(progress * Math.PI * 6.0) * 0.04 * scale * rub))
             } else if (destination != null) {
-                val progress = (footStepProgress[index] + (SpiderConfig.legStepSpeed.get() / 5.0).coerceIn(0.05, 1.0)).coerceAtMost(1.0)
-                footStepProgress[index] = progress
-                val start = footStepStarts[index] ?: planted
-                val stepping = start.lerp(destination, progress)
-                    .add(0.0, sin(progress * Math.PI) * 0.25 * scale, 0.0)
-                if (progress >= 1.0) {
+                // Match Leg.updateMovement from the original: travel at the
+                // configured world-units-per-tick speed, lift while traversing,
+                // then settle vertically onto the scanned ground target.
+                val position = planted ?: footStepStarts[index] ?: destination
+                val speed = SpiderConfig.legStepSpeed.get().coerceAtLeast(0.01)
+                val offset = destination.subtract(position)
+                val horizontalOffset = Vec3(offset.x, 0.0, offset.z)
+                val horizontalDistance = horizontalOffset.length()
+                val horizontalStep = if (horizontalDistance <= speed) {
+                    Vec3(destination.x, position.y, destination.z)
+                } else {
+                    position.add(horizontalOffset.scale(speed / horizontalDistance))
+                }
+                val lift = if (horizontalDistance > 0.35 * scale) 0.35 * scale else 0.0
+                val targetY = destination.y + lift
+                val nextY = position.y + (targetY - position.y).coerceIn(-speed, speed)
+                val stepping = Vec3(horizontalStep.x, nextY, horizontalStep.z)
+                if (horizontalDistance <= speed && kotlin.math.abs(nextY - destination.y) <= speed) {
                     playFootstepSound(level, destination)
                     footPositions[index] = destination
                     footStepStarts[index] = null
                     footStepTargets[index] = null
+                    footStepProgress[index] = 0.0
                     footStepStoppedAt[index] = tickCount
-                    stepping
+                    destination
                 } else {
+                    footPositions[index] = stepping
                     stepping
                 }
             } else {
