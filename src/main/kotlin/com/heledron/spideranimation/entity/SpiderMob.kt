@@ -321,9 +321,9 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     private fun hunt(serverLevel: ServerLevel) {
-        val night = serverLevel.dayTime % 24000L in 13000L..23000L
+        val brightOutside = serverLevel.isBrightOutside
         val target = serverLevel.players()
-            .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || night) }
+            .filter { it.isAlive && (!SpiderConfig.onlyAtNight.get() || !brightOutside) }
             .minByOrNull { it.distanceToSqr(this) }
         val distance = if (target == null) Double.MAX_VALUE else distanceTo(target).toDouble()
         val detectionDistance = SpiderConfig.chaseDistance.get()
