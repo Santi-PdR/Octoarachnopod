@@ -7,6 +7,8 @@ import net.minecraftforge.event.BuildCreativeModeTabContentsEvent
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent
 import net.minecraftforge.eventbus.api.IEventBus
 import net.minecraftforge.event.TickEvent
+import net.minecraftforge.event.RegisterCommandsEvent
+import net.minecraft.commands.Commands
 import net.minecraftforge.fml.ModLoadingContext
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.config.ModConfig
@@ -21,6 +23,7 @@ class SpiderAnimationMod {
         bus.addListener(::registerAttributes)
         bus.addListener(::addCreativeItems)
         MinecraftForge.EVENT_BUS.addListener(::onServerTick)
+        MinecraftForge.EVENT_BUS.addListener(::onRegisterCommands)
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SpiderConfig.SPEC)
     }
 
@@ -31,6 +34,74 @@ class SpiderAnimationMod {
     private fun addCreativeItems(event: BuildCreativeModeTabContentsEvent) {
         if (event.tabKey == CreativeModeTabs.SPAWN_EGGS) event.accept(ModItems.SPIDER_SPAWN_EGG.get())
         if (event.tabKey == CreativeModeTabs.TOOLS_AND_UTILITIES) event.accept(ModItems.SPIDER_TAMER.get())
+    }
+
+    private fun onRegisterCommands(event: RegisterCommandsEvent) {
+        event.dispatcher.register(
+            Commands.literal("spider")
+                .then(Commands.literal("newinstance").executes { context ->
+                    val player = context.source.playerOrException
+                    if (!player.isCreative) {
+                        context.source.sendFailure(Component.literal("/spider newinstance is creative-mode only."))
+                        0
+                    } else {
+                        spawnPersonalSpider(player, 1.0)
+                        context.source.sendSuccess({ Component.literal("Spawned your personal spider. Use /spider size or /spider release.") }, false)
+                        1
+                    }
+                }.then(Commands.argument("size", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.3, 20.0)).executes { context ->
+                    val player = context.source.playerOrException
+                    if (!player.isCreative) {
+                        context.source.sendFailure(Component.literal("/spider newinstance is creative-mode only."))
+                        0
+                    } else {
+                        spawnPersonalSpider(player, com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "size"))
+                        context.source.sendSuccess({ Component.literal("Spawned your personal spider.") }, false)
+                        1
+                    }
+                }))
+                .then(Commands.literal("release").executes { context ->
+                    val player = context.source.playerOrException
+                    val removed = context.source.server.allLevels
+                        .flatMap { it.getEntitiesOfClass(SpiderMob::class.java) }
+                        .filter { it.personalOwner == player.uuid }
+                        .onEach { it.discard() }
+                        .count()
+                    if (removed > 0) {
+                        context.source.sendSuccess({ Component.literal("Spider released.") }, false)
+                        1
+                    } else {
+                        context.source.sendFailure(Component.literal("You have no personal spider. Use /spider newinstance first."))
+                        0
+                    }
+                })
+                .then(Commands.literal("size").then(Commands.argument("size", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.3, 20.0)).executes { context ->
+                    val player = context.source.playerOrException
+                    val spider = context.source.server.allLevels.asSequence()
+                        .flatMap { it.getEntitiesOfClass(SpiderMob::class.java).asSequence() }
+                        .firstOrNull { it.personalOwner == player.uuid }
+                    if (spider == null) {
+                        context.source.sendFailure(Component.literal("You have no personal spider. Use /spider newinstance first."))
+                        0
+                    } else {
+                        val size = com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "size")
+                        spider.resizePersonal(size)
+                        context.source.sendSuccess({ Component.literal("Spider size set to $size.") }, false)
+                        1
+                    }
+                }))
+        )
+    }
+
+    private fun spawnPersonalSpider(player: net.minecraft.server.level.ServerPlayer, size: Double) {
+        player.server.allLevels.forEach { level ->
+            level.getEntitiesOfClass(SpiderMob::class.java).filter { it.personalOwner == player.uuid }.forEach { it.discard() }
+        }
+        val level = player.serverLevel()
+        val spider = ModEntities.SPIDER.get().create(level) ?: return
+        spider.moveTo(player.x, player.y + 1.0, player.z, player.yRot, 0f)
+        spider.makePersonal(player.uuid, size)
+        level.addFreshEntity(spider)
     }
 
     private fun onServerTick(event: TickEvent.ServerTickEvent) {

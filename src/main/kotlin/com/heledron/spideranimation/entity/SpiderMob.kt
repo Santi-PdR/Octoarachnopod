@@ -20,6 +20,7 @@ import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.entity.SpawnGroupData
+import java.util.UUID
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier
 import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.monster.Monster
@@ -50,6 +51,10 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     var enraged = false
         private set
     var naturalEncounter = false
+    var personalOwner: UUID? = null
+        private set
+    var personalSize = 1.0
+        private set
     private var attackTimer = 0
     private var alertTimer = 0
     private var phase = 0.0
@@ -120,6 +125,19 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (variant == Variant.HUNTER) currentScale = SpiderConfig.hunterSize.get()
     }
 
+    fun makePersonal(owner: UUID, size: Double) {
+        personalOwner = owner
+        tamed = true
+        personalSize = size.coerceIn(0.3, 20.0)
+        currentScale = personalSize
+        setTarget(null)
+    }
+
+    fun resizePersonal(size: Double) {
+        personalSize = size.coerceIn(0.3, 20.0)
+        currentScale = personalSize
+    }
+
     override fun mobInteract(player: Player, hand: InteractionHand): InteractionResult {
         val stack = player.getItemInHand(hand)
         if (stack.item == net.minecraft.world.item.Items.NETHERITE_INGOT &&
@@ -167,6 +185,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         tag.putBoolean("Tamed", tamed)
         tag.putBoolean("Enraged", enraged)
         tag.putBoolean("NaturalEncounter", naturalEncounter)
+        tag.putDouble("PersonalSize", personalSize)
+        personalOwner?.let { tag.putUUID("PersonalOwner", it) }
     }
 
     override fun readAdditionalSaveData(tag: CompoundTag) {
@@ -175,6 +195,8 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         tamed = tag.getBoolean("Tamed")
         enraged = tag.getBoolean("Enraged")
         naturalEncounter = tag.getBoolean("NaturalEncounter")
+        personalSize = tag.getDouble("PersonalSize").takeIf { it > 0.0 } ?: 1.0
+        personalOwner = if (tag.hasUUID("PersonalOwner")) tag.getUUID("PersonalOwner") else null
         applyVariantStats(healToMax = false)
         if (enraged && variant == Variant.NETHERITE) {
             getAttribute(Attributes.MAX_HEALTH)?.baseValue = SpiderConfig.enragedHealth.get()
@@ -199,6 +221,18 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             val speed = if (rider.isSprinting) 0.42 else 0.24
             setPos(x + (-sin(yaw) * forward + cos(yaw) * strafe) * speed, y, z + (cos(yaw) * forward + sin(yaw) * strafe) * speed)
             currentScale += (SpiderConfig.riddenSize.get() - currentScale) * 0.2
+            setTarget(null)
+        } else if (tamed && personalOwner != null) {
+            val owner = serverLevel.getPlayerByUUID(personalOwner!!)
+            if (owner != null && distanceTo(owner) > 2.0) {
+                val dx = owner.x - x
+                val dz = owner.z - z
+                val direction = Vec3(dx, 0.0, dz).normalize()
+                val speed = if (distanceTo(owner) > 8.0) 0.28 else 0.16
+                setYRot(Math.toDegrees(atan2(-dx, dz)).toFloat())
+                setPos(x + direction.x * speed, y, z + direction.z * speed)
+            }
+            currentScale += (personalSize - currentScale) * 0.2
             setTarget(null)
         } else if (!tamed) {
             hunt(serverLevel)
