@@ -984,7 +984,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
                 val nextY = position.y + (targetY - position.y).coerceIn(-speed, speed)
                 val stepping = Vec3(horizontalStep.x, nextY, horizontalStep.z)
                 if (horizontalDistance <= speed && kotlin.math.abs(nextY - destination.y) <= speed) {
-                    playFootstepSound(level, destination)
+                    if (footStepTargetGrounded[index]) playFootstepSound(level, destination)
                     footPositions[index] = destination
                     footGrounded[index] = footStepTargetGrounded[index]
                     footStepStarts[index] = null
