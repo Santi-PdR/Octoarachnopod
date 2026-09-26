@@ -64,6 +64,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     var personalSize = 1.0
         private set
     private var attackTimer = 0
+    private var blindnessCooldown = 0
     private var lungeTimer = 0
     private var lungeDirection = Vec3.ZERO
     private var aiMode = AiMode.WANDER
@@ -240,6 +241,7 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         ensureModel(serverLevel)
         if (tickCount % 20 == 0) grantEncounterAdvancements(serverLevel)
         attackTimer = (attackTimer - 1).coerceAtLeast(0)
+        blindnessCooldown = (blindnessCooldown - 1).coerceAtLeast(0)
         if (lungeTimer > 0) lungeTimer--
         val scaleBeforeUpdate = currentScale
 
@@ -275,10 +277,15 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (deltaMovement.horizontalDistance() > 0.015) phase += 0.45
         updateModel(serverLevel)
         bossEvent.progress = (health / maxHealth).coerceIn(0f, 1f)
-        if (variant == Variant.HUNTER && SpiderConfig.hunterBlindnessRange.get() > 0 && tickCount % 20 == 0) {
-            serverLevel.players().filter { it.distanceTo(this) <= SpiderConfig.hunterBlindnessRange.get() }.forEach {
-                it.addEffect(MobEffectInstance(MobEffects.BLINDNESS, (SpiderConfig.hunterBlindnessSeconds.get() * 20).toInt(), 0, true, false))
+        if (variant == Variant.HUNTER && !tamed && aiMode == AiMode.CHASE &&
+            SpiderConfig.hunterBlindnessRange.get() > 0.0 && blindnessCooldown == 0
+        ) {
+            val duration = (SpiderConfig.hunterBlindnessSeconds.get() * 20.0).toInt().coerceAtLeast(1)
+            val affected = serverLevel.players().filter {
+                it.isAlive && it.distanceToSqr(this) <= SpiderConfig.hunterBlindnessRange.get() * SpiderConfig.hunterBlindnessRange.get()
             }
+            affected.forEach { it.addEffect(MobEffectInstance(MobEffects.BLINDNESS, duration, 0), this) }
+            if (affected.isNotEmpty()) blindnessCooldown = 40
         }
     }
 
