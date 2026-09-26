@@ -685,13 +685,14 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         if (random.nextDouble() < SpiderConfig.wanderPauseChance.get()) return
 
         val radius = SpiderConfig.wanderRadius.get()
-        repeat(12) {
+        repeat(8) {
             val angle = random.nextDouble() * Math.PI * 2.0
-            val distance = radius * (0.25 + random.nextDouble() * 0.75)
+            val distance = radius * random.nextDouble()
             val targetX = anchor.x + cos(angle) * distance
             val targetZ = anchor.z + sin(angle) * distance
-            val targetY = SafeGroundFinder.findSafeY(serverLevel, targetX, targetZ) ?: return@repeat
-            if (kotlin.math.abs(targetY - anchor.y) > 8.0) return@repeat
+            val targetY = SafeGroundFinder.groundYAt(serverLevel, targetX, targetZ, anchor.y) ?: return@repeat
+            val maxStepHeight = (1.1 * currentScale * 1.5).coerceIn(3.0, 12.0)
+            if (!isWanderPathSafe(serverLevel, anchor, Vec3(targetX, targetY, targetZ), maxStepHeight)) return@repeat
 
             val target = BlockPos.containing(targetX, targetY, targetZ)
             wanderGoal = target
@@ -700,6 +701,28 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
             setYRot(Math.toDegrees(atan2(-(targetX - x), targetZ - z)).toFloat())
             return
         }
+    }
+
+    private fun isWanderPathSafe(level: ServerLevel, start: Vec3, end: Vec3, maxStepHeight: Double): Boolean {
+        val dx = end.x - start.x
+        val dz = end.z - start.z
+        val distance = sqrt(dx * dx + dz * dz)
+        if (distance < 1.0) return true
+
+        val steps = kotlin.math.ceil(distance).toInt()
+        val stepX = dx / steps
+        val stepZ = dz / steps
+        var pathX = start.x
+        var pathZ = start.z
+        var previousY = SafeGroundFinder.groundYAt(level, pathX, pathZ, start.y) ?: return false
+        repeat(steps) {
+            pathX += stepX
+            pathZ += stepZ
+            val nextY = SafeGroundFinder.groundYAt(level, pathX, pathZ, previousY) ?: return false
+            if (previousY - nextY > maxStepHeight) return false
+            previousY = nextY
+        }
+        return true
     }
 
     private fun grantEncounterAdvancements(level: ServerLevel) {
