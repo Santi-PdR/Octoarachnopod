@@ -14,6 +14,15 @@ import net.minecraft.world.level.levelgen.Heightmap
  * dry, two-block-clearance spawn/patrol test.
  */
 object SafeGroundFinder {
+    data class Opening(
+        val x: Double,
+        val y: Double,
+        val z: Double,
+        val height: Int,
+        val alongX: Boolean,
+        val lo: Double,
+        val hi: Double
+    )
     fun findSafeY(level: ServerLevel, x: Double, z: Double, maxSearch: Int = SpiderConfig.spawnMaxVerticalSearch.get()): Double? {
         val blockX = kotlin.math.floor(x).toInt()
         val blockZ = kotlin.math.floor(z).toInt()
@@ -126,6 +135,82 @@ object SafeGroundFinder {
         val state = level.getBlockState(pos)
         return !state.isAir && !state.`is`(BlockTags.DOORS) && !state.`is`(BlockTags.TRAPDOORS) &&
             !state.`is`(BlockTags.FENCE_GATES) && !state.getCollisionShape(level, pos).isEmpty
+    }
+
+    fun openingHeight(level: ServerLevel, x: Double, groundY: Double, z: Double): Int {
+        val blockX = kotlin.math.floor(x).toInt()
+        val blockZ = kotlin.math.floor(z).toInt()
+        val feetY = kotlin.math.floor(groundY).toInt()
+        val floorPos = BlockPos(blockX, feetY - 1, blockZ)
+        if (!level.getBlockState(floorPos).isFaceSturdy(level, floorPos, Direction.UP)) return 0
+        val feetPos = BlockPos(blockX, feetY, blockZ)
+        if (!isDoorway(level, feetPos)) return 0
+        return if (isDoorway(level, BlockPos(blockX, feetY + 1, blockZ))) 2 else 1
+    }
+
+    fun collectOpenings(
+        level: ServerLevel, hitX: Double, hitZ: Double, groundY: Double,
+        targetX: Double, targetZ: Double, radius: Int = 7, minHeight: Int = 1, limit: Int = 12
+    ): List<Opening> {
+        val baseX = kotlin.math.floor(hitX).toInt()
+        val baseZ = kotlin.math.floor(hitZ).toInt()
+        val candidates = mutableListOf<Pair<Double, Opening>>()
+        for (dx in -radius..radius) for (dz in -radius..radius) {
+            val blockX = baseX + dx
+            val blockZ = baseZ + dz
+            if (!level.hasChunk(blockX shr 4, blockZ shr 4)) continue
+            val candidateX = blockX + 0.5
+            val candidateZ = blockZ + 0.5
+            for (verticalOffset in -1..1) {
+                val candidateY = groundY + verticalOffset
+                val height = openingHeight(level, candidateX, candidateY, candidateZ)
+                if (height < minHeight) continue
+                val feetY = kotlin.math.floor(candidateY).toInt()
+                val axis = pinchAxis(level, blockX, feetY, blockZ)
+                if (axis == 0) continue
+                val alongX = axis == 2
+                val (lo, hi) = passageExtent(level, candidateX, candidateY, candidateZ, height, alongX)
+                val opening = Opening(candidateX, candidateY, candidateZ, height, alongX, lo, hi)
+                val distance = (targetX - candidateX) * (targetX - candidateX) + (targetZ - candidateZ) * (targetZ - candidateZ)
+                candidates += distance to opening
+                break
+            }
+        }
+        return candidates.sortedBy { it.first }.distinctBy { Triple(it.second.x, it.second.y, it.second.z) }
+            .take(limit).map { it.second }
+    }
+
+    private fun passageExtent(level: ServerLevel, x: Double, y: Double, z: Double, height: Int, alongX: Boolean): Pair<Double, Double> {
+        val origin = if (alongX) x else z
+        var lo = origin
+        var hi = origin
+        val expectedAxis = if (alongX) 2 else 1
+        for (direction in intArrayOf(-1, 1)) {
+            for (step in 1..32) {
+                val candidateX = if (alongX) x + direction * step else x
+                val candidateZ = if (alongX) z else z + direction * step
+                if (openingHeight(level, candidateX, y, candidateZ) < height) break
+                val axis = pinchAxis(level, kotlin.math.floor(candidateX).toInt(), kotlin.math.floor(y).toInt(), kotlin.math.floor(candidateZ).toInt())
+                if (axis != expectedAxis) break
+                val along = if (alongX) candidateX else candidateZ
+                if (direction < 0) lo = along else hi = along
+            }
+        }
+        return lo to hi
+    }
+
+    private fun pinchAxis(level: ServerLevel, x: Int, feetY: Int, z: Int): Int {
+        val blockedX = isBodyBlocking(level, BlockPos(x + 1, feetY, z)) && isBodyBlocking(level, BlockPos(x - 1, feetY, z))
+        if (blockedX) return 1
+        val blockedZ = isBodyBlocking(level, BlockPos(x, feetY, z + 1)) && isBodyBlocking(level, BlockPos(x, feetY, z - 1))
+        return if (blockedZ) 2 else 0
+    }
+
+    private fun isDoorway(level: ServerLevel, pos: BlockPos): Boolean {
+        if (isPassable(level, pos)) return true
+        if (!level.getFluidState(pos).isEmpty) return false
+        val state = level.getBlockState(pos)
+        return state.`is`(BlockTags.DOORS) || state.`is`(BlockTags.TRAPDOORS) || state.`is`(BlockTags.FENCE_GATES)
     }
 
     private fun isDrySolidGround(level: ServerLevel, pos: BlockPos): Boolean {
