@@ -2,14 +2,12 @@ package com.heledron.spideranimation
 
 import com.heledron.spideranimation.entity.SpiderMob
 import net.minecraft.world.entity.Display.BlockDisplay
-import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.Difficulty
 import net.minecraft.world.entity.Entity
-import net.minecraft.world.entity.MobSpawnType
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.level.saveddata.SavedData
@@ -247,9 +245,7 @@ object SpiderSpawnManager {
                 val candidateZ = player.z + sin(angle) * distance
                 val safeY = com.heledron.spideranimation.entity.SafeGroundFinder.groundYAt(level, candidateX, candidateZ, player.y)
                     ?: return@repeat
-                val pos = BlockPos.containing(candidateX, safeY, candidateZ)
                 val spider = ModEntities.SPIDER.get().create(level) ?: return@repeat
-                spider.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.NATURAL, null, null)
                 spider.moveTo(candidateX, safeY, candidateZ, Random.nextFloat() * 360f, 0f)
                 spider.naturalEncounter = true
                 spider.chooseVariant()
