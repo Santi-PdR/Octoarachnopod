@@ -1310,7 +1310,11 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
 
     override fun remove(reason: Entity.RemovalReason) {
         if (!level().isClientSide) {
-            if (reason == Entity.RemovalReason.KILLED || health <= 0.0f) rollTrophy(level() as ServerLevel)
+            if (reason == Entity.RemovalReason.KILLED || health <= 0.0f) {
+                rollTrophy(level() as ServerLevel)
+            } else if (!reason.shouldDestroy()) {
+                SpiderSpawnManager.onUnexpectedRemoval(this, reason)
+            }
             cleanup()
         }
         super.remove(reason)
