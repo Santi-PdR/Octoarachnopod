@@ -45,6 +45,7 @@ import kotlin.math.sin
 class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, level) {
     enum class Variant { NETHERITE, CAMO, POISON, HUNTER }
     private enum class AiMode { WANDER, ALERT, CHASE }
+    private data class LegLayout(val rootZ: Double, val side: Double, val restX: Double, val restZ: Double, val reach: Double)
 
     var variant: Variant = Variant.NETHERITE
         private set
@@ -369,9 +370,52 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
         }
     }
 
+    private fun legLayouts(): List<LegLayout> {
+        val count = if (variant == Variant.NETHERITE) SpiderConfig.netheriteLegs.get() else 8
+        val pairs = count / 2
+        val standardPairs = listOf(
+            doubleArrayOf(0.1, 1.0, 1.6, 1.1),
+            doubleArrayOf(0.0, 1.3, 0.4, 1.0),
+            doubleArrayOf(-0.1, 1.3, -0.9, 1.1),
+            doubleArrayOf(-0.2, 1.1, -2.5, 1.6)
+        )
+        val layouts = mutableListOf<LegLayout>()
+        repeat(pairs) { index ->
+            val sample = if (pairs <= 1) 1.5 else index.toDouble() * 3.0 / (pairs - 1)
+            val lower = sample.toInt().coerceAtMost(2)
+            val blend = sample - lower
+            val first = standardPairs[lower]
+            val second = standardPairs[lower + 1]
+            fun value(column: Int) = first[column] + (second[column] - first[column]) * blend
+            val rootZ: Double
+            val restX: Double
+            val restZ: Double
+            val reach: Double
+            if (variant == Variant.NETHERITE) {
+                val q = if (pairs <= 1) 0.5 else index.toDouble() / (pairs - 1)
+                rootZ = 0.1 - 0.3 * q
+                restX = 1.0 + 0.3 * sin(Math.PI * q)
+                restZ = 1.6 - 4.1 * q
+                reach = 1.05 + 0.55 * q
+            } else {
+                rootZ = value(0)
+                restX = value(1)
+                restZ = value(2)
+                reach = value(3)
+            }
+            layouts += LegLayout(rootZ, -1.0, restX, restZ, reach)
+            layouts += LegLayout(rootZ, 1.0, restX, restZ, reach)
+        }
+        if (count % 2 == 1) layouts += LegLayout(0.15, 0.0, 0.0, 1.8, 1.1)
+        return layouts
+    }
+
     private fun ensureModel(level: ServerLevel) {
-        if (parts.isNotEmpty()) return
-        repeat(19) { index ->
+        val requiredParts = legLayouts().size * 3
+        if (parts.size == requiredParts) return
+        parts.toList().forEach { if (it.isAlive) it.discard() }
+        parts.clear()
+        repeat(requiredParts) { index ->
             val display = BLOCK_DISPLAY.create(level) ?: return@repeat
             display.setBlockState(stateFor(index))
             display.setNoGravity(true)
@@ -391,25 +435,38 @@ class SpiderMob(type: EntityType<out SpiderMob>, level: Level) : Monster(type, l
     }
 
     private fun updateModel() {
-        if (parts.size != 19) return
-        val scale = currentScale.toFloat()
+        val layouts = legLayouts()
+        if (parts.size != layouts.size * 3) return
+        val scale = currentScale
         val yaw = Math.toRadians(yRot.toDouble())
         val forward = Vec3(-sin(yaw), 0.0, cos(yaw))
-        val center = Vec3(x, y + 0.8 * currentScale + sin(phase) * 0.08 * currentScale, z)
-        box(parts[0], center, Vector3f(1.2f * scale, 0.58f * scale, 1.4f * scale))
-        box(parts[1], center.add(forward.scale(-0.62 * currentScale)), Vector3f(0.85f * scale, 0.5f * scale, 0.9f * scale))
-        box(parts[2], center.add(forward.scale(0.62 * currentScale)), Vector3f(0.62f * scale, 0.48f * scale, 0.65f * scale))
-        for (i in 0 until 8) {
-            val side = if (i % 2 == 0) -1.0 else 1.0
-            val row = (i / 2 - 1) * 0.32 * currentScale
-            val stride = sin(phase + i * 1.5) * 0.25 * currentScale
-            val hip = center.add(forward.scale(row)).add(0.0, -0.16 * currentScale, side * 0.38 * currentScale)
-            val knee = center.add(forward.scale(row + (if (i < 4) 0.48 else -0.35) * currentScale))
-                .add(0.12 * currentScale, -0.3 * currentScale, side * 0.92 * currentScale)
-            val foot = knee.add(0.0, -0.48 * currentScale + max(0.0, sin(phase + i * 1.5)) * 0.22 * currentScale, side * 0.72 * currentScale)
-                .add(forward.scale(stride))
-            segment(parts[3 + i * 2], hip, knee, 0.15f * scale)
-            segment(parts[4 + i * 2], knee, foot, 0.12f * scale)
+        val right = Vec3(forward.z, 0.0, -forward.x)
+        val anchor = Vec3(x, y + 1.1 * scale, z)
+        layouts.forEachIndexed { index, leg ->
+            val pairPhase = phase + (index / 2) * Math.PI
+            val stride = sin(pairPhase) * 0.25 * scale
+            val lift = max(0.0, sin(pairPhase)) * 0.2 * scale
+            val root = anchor.add(forward.scale(leg.rootZ * scale))
+                .add(right.scale(leg.side * 0.18 * scale))
+            val foot = Vec3(x, y + 0.04 * scale + lift, z)
+                .add(right.scale(leg.side * leg.restX * scale))
+                .add(forward.scale((leg.restZ + stride) * scale))
+            val firstJoint = root.lerp(foot, 0.28)
+                .add(right.scale(leg.side * leg.reach * 0.42 * scale))
+                .add(0.0, -0.12 * scale, 0.0)
+            val secondJoint = root.lerp(foot, 0.64)
+                .add(right.scale(leg.side * leg.reach * 0.55 * scale))
+                .add(0.0, -0.28 * scale, 0.0)
+            val points = listOf(root, firstJoint, secondJoint, foot)
+            for (segmentIndex in 0 until 3) {
+                val taper = 0.28125 + (0.09375 - 0.28125) * segmentIndex / 2.0
+                segment(
+                    parts[index * 3 + segmentIndex],
+                    points[segmentIndex],
+                    points[segmentIndex + 1],
+                    (taper * scale).toFloat()
+                )
+            }
         }
     }
 
