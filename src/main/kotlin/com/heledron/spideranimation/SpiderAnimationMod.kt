@@ -1,6 +1,12 @@
 package com.heledron.spideranimation
 
 import com.mojang.brigadier.arguments.StringArgumentType
+import com.mojang.brigadier.arguments.BoolArgumentType
+import com.mojang.brigadier.arguments.DoubleArgumentType
+import com.mojang.brigadier.arguments.IntegerArgumentType
+import com.mojang.brigadier.builder.ArgumentBuilder
+import net.minecraft.commands.arguments.ResourceLocationArgument
+import net.minecraft.commands.synchronization.SuggestionProviders
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import net.minecraft.commands.CommandSourceStack
 import com.heledron.spideranimation.entity.SpiderMob
@@ -112,34 +118,42 @@ class SpiderAnimationMod {
     private fun configCommand(): LiteralArgumentBuilder<CommandSourceStack> {
         val root = Commands.literal("config").requires { it.hasPermission(2) }
         SpiderConfig.commandEntries.forEach { (path, entry) ->
+            val getCommand = Commands.literal("get").executes { context ->
+                context.source.sendSuccess(
+                    { Component.literal("Spider config '$path' is ${entry.get()}.") },
+                    false
+                )
+                1
+            }
+            val setArgument: ArgumentBuilder<CommandSourceStack, *> = when (entry.get()) {
+                is Boolean -> Commands.argument("value", BoolArgumentType.bool())
+                    .executes { context ->
+                        setConfigValueFromCommand(path, entry, BoolArgumentType.getBool(context, "value").toString(), context.source)
+                    }
+                is Int -> Commands.argument("value", IntegerArgumentType.integer())
+                    .executes { context ->
+                        setConfigValueFromCommand(path, entry, IntegerArgumentType.getInteger(context, "value").toString(), context.source)
+                    }
+                is Double -> Commands.argument("value", DoubleArgumentType.doubleArg())
+                    .executes { context ->
+                        setConfigValueFromCommand(path, entry, DoubleArgumentType.getDouble(context, "value").toString(), context.source)
+                    }
+                is String -> Commands.argument("value", ResourceLocationArgument.id())
+                    .suggests(SuggestionProviders.AVAILABLE_SOUNDS)
+                    .executes { context ->
+                        setConfigValueFromCommand(
+                            path,
+                            entry,
+                            ResourceLocationArgument.getId(context, "value").toString(),
+                            context.source
+                        )
+                    }
+                else -> throw IllegalStateException("Unsupported config value type for '$path'.")
+            }
             root.then(
                 Commands.literal(path)
-                    .then(Commands.literal("get").executes { context ->
-                        context.source.sendSuccess(
-                            { Component.literal("Spider config '$path' is ${entry.get()}.") },
-                            false
-                        )
-                        1
-                    })
-                    .then(Commands.literal("set")
-                        .then(Commands.argument("value", StringArgumentType.word()).executes { context ->
-                            val raw = StringArgumentType.getString(context, "value")
-                            val error = runCatching {
-                                setConfigValue(entry, raw)
-                                SpiderConfig.SPEC.save()
-                                SpiderSpawnManager.onConfigSet(path)
-                            }.exceptionOrNull()
-                            if (error != null) {
-                                context.source.sendFailure(Component.literal("Invalid value for '$path': ${error.message ?: raw}"))
-                                0
-                            } else {
-                                context.source.sendSuccess(
-                                    { Component.literal("Spider config '$path' set to ${entry.get()} (saved).") },
-                                    true
-                                )
-                                1
-                            }
-                        }))
+                    .then(getCommand)
+                    .then(Commands.literal("set").then(setArgument))
             )
         }
         return root
@@ -154,6 +168,28 @@ class SpiderAnimationMod {
             is String -> (entry as ForgeConfigSpec.ConfigValue<String>).set(raw)
             else -> throw IllegalArgumentException("Unsupported config value type.")
         }
+    }
+
+    private fun setConfigValueFromCommand(
+        path: String,
+        entry: ForgeConfigSpec.ConfigValue<*>,
+        raw: String,
+        source: CommandSourceStack
+    ): Int {
+        val error = runCatching {
+            setConfigValue(entry, raw)
+            SpiderConfig.SPEC.save()
+            SpiderSpawnManager.onConfigSet(path)
+        }.exceptionOrNull()
+        if (error != null) {
+            source.sendFailure(Component.literal("Invalid value for '$path': ${error.message ?: raw}"))
+            return 0
+        }
+        source.sendSuccess(
+            { Component.literal("Spider config '$path' set to ${entry.get()} (saved).") },
+            true
+        )
+        return 1
     }
 
     private fun personalSpiders(player: net.minecraft.server.level.ServerPlayer): List<SpiderMob> {
